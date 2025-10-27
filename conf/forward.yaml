@@ -1,0 +1,29 @@
+defaults:
+  - _self_
+
+data: "syn_linear_gaussian_regression"
+data_size: 100
+x_grid_size: 100
+seed: 999
+
+n_estimators: 64
+average_before_softmax: True
+
+
+date: ${now:%Y-%m-%d}
+lastrun: ${now:%Y-%m-%dT%H:%M:%S%z}
+git: ${githash:}
+
+hydra:
+  run:
+    dir: "./outputs/${date}/\
+      data=${data}
+      n=${data_size}
+      m=${x_grid_size}
+      n_est=${n_estimators}
+      seed=${seed}"
+  sweep:
+    dir: ${hydra.run.dir}
+    subdir: .
+
+# rec_length=${recursion_length}

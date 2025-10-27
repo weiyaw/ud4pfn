@@ -1,0 +1,7 @@
+tabpfn==2.1.3
+torch==2.9.0
+numpy
+scipy
+pandas
+scikit-learn
+hydra-core
