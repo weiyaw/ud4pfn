@@ -21,18 +21,18 @@ m = 100
 seed = args.seed
 tabpfn_n_estimators = args.n_est
 tabpfn_average_before_softmax = True
-savedir = f"outputs/coverage/syn-mixture-probit n={n} m={m} seed={seed} n_est={tabpfn_n_estimators}"
+savedir = f"outputs/coverage/syn-mixture-probit n={n} m={m} n_est={tabpfn_n_estimators} seed={seed}"
 
 logger.remove()  # remove default logger
 log_format = "{time} - {level} - {message}"
-logger.add(f"{savedir}/ghat.log", level="INFO", format=log_format)
+logger.add(f"{savedir}/coverage.log", level="INFO", format=log_format)
 logger.add(sys.stderr, level="INFO", format=log_format)
 logger.info(f"Saving outputs to {savedir}")
 logger.info(f"Git hash: {utils.githash()}")
 
 
-torch.manual_seed(8655 + args.seed)
-rng = np.random.default_rng(1907 + args.seed)
+torch.manual_seed(8655 + seed)
+rng = np.random.default_rng(1907 + seed)
 rng_others, rng_data = rng.spawn(2)
 
 X, y, x_grid, true_curve, title = data.load_syn_mixture_probit(
@@ -40,7 +40,7 @@ X, y, x_grid, true_curve, title = data.load_syn_mixture_probit(
 )
 
 utils.write_to_local(
-    f"{savedir}/data-{args.seed}.pickle",
+    f"{savedir}/data.pickle",
     {"X": X, "y": y, "x_grid": x_grid, "true_curve": true_curve, "title": title},
 )
 
@@ -54,4 +54,4 @@ clf = TabPFNClassifier(
 g_hat = forward.build_g_hat_logreg(clf, X, y, x_grid)
 logger.info(f"Built g_hat in {timer() - start:.2f} seconds")
 
-utils.write_to_local(f"{savedir}/ghat-{args.seed}.pickle", g_hat)
+utils.write_to_local(f"{savedir}/ghat.pickle", g_hat)
