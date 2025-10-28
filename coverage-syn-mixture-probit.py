@@ -1,6 +1,7 @@
 import data
 import argparse
-import logging
+from loguru import logger
+import sys
 
 import numpy as np
 import torch
@@ -14,12 +15,20 @@ parser.add_argument("--seed", type=int, default=0)
 parser.add_argument("--n_est", type=int, default=8)
 args = parser.parse_args()
 
+
 n = 100
 m = 100
 seed = args.seed
 tabpfn_n_estimators = args.n_est
 tabpfn_average_before_softmax = True
 savedir = f"outputs/coverage/syn-mixture-probit n={n} m={m} seed={seed} n_est={tabpfn_n_estimators}"
+
+logger.remove()  # remove default logger
+log_format = "{time} - {level} - {message}"
+logger.add(f"{savedir}/ghat.log", level="INFO", format=log_format)
+logger.add(sys.stderr, level="INFO", format=log_format)
+logger.info(f"Saving outputs to {savedir}")
+logger.info(f"Git hash: {utils.githash()}")
 
 
 torch.manual_seed(8655 + args.seed)
@@ -43,6 +52,6 @@ clf = TabPFNClassifier(
     fit_mode="low_memory",
 )
 g_hat = forward.build_g_hat_logreg(clf, X, y, x_grid)
-logging.info(f"Built g_hat in {timer() - start:.2f} seconds")
+logger.info(f"Built g_hat in {timer() - start:.2f} seconds")
 
 utils.write_to_local(f"{savedir}/ghat-{args.seed}.pickle", g_hat)

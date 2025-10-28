@@ -166,7 +166,7 @@ def load_syn_mixture_probit(
 
     # labels from the same mixture–probit as your original
     p = 0.7 * norm.cdf((x - 5.0) / 1.0) + 0.3 * norm.cdf((x - 9.0) / 1.0)
-    y = (rng_y.rand(x.size) < p).astype(np.int32)
+    y = (rng_y.random(x.size) < p).astype(np.int32)
 
     # grid + true curve (unchanged)
     x_grid = np.linspace(0.0, 12.0, m, dtype=np.float32)[:, None]
