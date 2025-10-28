@@ -50,6 +50,7 @@ clf = TabPFNRegressor(
     average_before_softmax=tabpfn_average_before_softmax,
     softmax_temperature=1.0,
     fit_mode="low_memory",
+    model_path="tabpfn-model/tabpfn-v2-regressor.ckpt",
 )
 g_hat = forward.build_g_hat_linreg(clf, X, y, x_grid, 0.5)
 logger.info(f"Built g_hat in {timer() - start:.2f} seconds")

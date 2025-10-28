@@ -50,6 +50,7 @@ clf = TabPFNClassifier(
     average_before_softmax=True,
     softmax_temperature=1.0,
     fit_mode="low_memory",
+    model_path="tabpfn-model/tabpfn-v2-classifier.ckpt",
 )
 g_hat = forward.build_g_hat_logreg(clf, X, y, x_grid)
 logger.info(f"Built g_hat in {timer() - start:.2f} seconds")
