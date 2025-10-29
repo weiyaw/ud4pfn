@@ -46,7 +46,7 @@ utils.write_to_local(
 
 start = timer()
 clf = TabPFNClassifier(
-    n_estimators=1,
+    n_estimators=tabpfn_n_estimators,
     average_before_softmax=True,
     softmax_temperature=1.0,
     fit_mode="low_memory",
