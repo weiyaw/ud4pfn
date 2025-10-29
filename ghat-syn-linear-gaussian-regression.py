@@ -18,10 +18,11 @@ args = parser.parse_args()
 
 n = 100
 m = 100
+y_star = 3.0
 seed = args.seed
 tabpfn_n_estimators = args.n_est
 tabpfn_average_before_softmax = True
-savedir = f"outputs/coverage/syn-linear-gaussian-regression n={n} m={m} n_est={tabpfn_n_estimators} seed={seed}"
+savedir = f"outputs/coverage/syn-linear-gaussian-regression y_star={y_star} n={n} m={m} n_est={tabpfn_n_estimators} seed={seed}"
 
 logger.remove()  # remove default logger
 log_format = "{time} - {level} - {message}"
@@ -36,7 +37,7 @@ rng = np.random.default_rng(1907 + seed)
 rng_others, rng_data = rng.spawn(2)
 
 X, y, x_grid, true_curve, title = data.load_syn_linear_gaussian_regression(
-    n=n, m=m, design="iid", rng=rng_data
+    n=n, m=m, y_star=y_star, design="iid", rng=rng_data
 )
 
 utils.write_to_local(
@@ -52,7 +53,7 @@ clf = TabPFNRegressor(
     fit_mode="low_memory",
     model_path="tabpfn-model/tabpfn-v2-regressor.ckpt",
 )
-g_hat = forward.build_g_hat_linreg(clf, X, y, x_grid, 0.5)
+g_hat = forward.build_g_hat_linreg(clf, X, y, x_grid, y_star=y_star)
 logger.info(f"Built g_hat in {timer() - start:.2f} seconds")
 
 utils.write_to_local(f"{savedir}/ghat.pickle", g_hat)
