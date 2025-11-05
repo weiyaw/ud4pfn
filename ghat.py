@@ -35,7 +35,7 @@ rng_others, rng_data = rng.spawn(2)
 
 if setup == "linreg":
     y_star = 3.0
-    savedir = f"outputs/coverage/syn-linear-gaussian-regression y_star={y_star} n={n} m={m} n_est={tabpfn_n_estimators} seed={seed}"
+    savedir = f"outputs/coverage/setup=linreg y_star={y_star} n={n} m={m} n_est={tabpfn_n_estimators} seed={seed}"
     X, y, x_grid, true_curve, title = data.load_syn_linear_gaussian_regression(
         n=n, m=m, y_star=y_star, design="iid", rng=rng_data
     )
@@ -47,7 +47,7 @@ if setup == "linreg":
         model_path="tabpfn-model/tabpfn-v2-regressor.ckpt",
     )
 elif setup == "probit":
-    savedir = f"outputs/coverage/syn-mixture-probit n={n} m={m} n_est={tabpfn_n_estimators} seed={seed}"
+    savedir = f"outputs/coverage/setup=probit n={n} m={m} n_est={tabpfn_n_estimators} seed={seed}"
     X, y, x_grid, true_curve, title = data.load_syn_mixture_probit(
         n=n, m=m, design="iid", rng=rng_data
     )
