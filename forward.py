@@ -5,87 +5,8 @@ from typing import Callable
 import torch
 
 import numpy as np
+from numpy.random import Generator
 from tqdm import trange
-
-
-# class TabPFNRegresorPPD(TabPFNRegressor):
-
-#     def __init__(
-#         self,
-#         categorical_x: list[bool],
-#         n_estimators: int = 8,  # this is the default in 2.1.3
-#         average_before_softmax: bool = False,
-#     ):
-#         categorical_features_indices = [i for i, c in enumerate(categorical_x) if c]
-#         super().__init__(
-#             n_estimators=n_estimators,
-#             average_before_softmax=average_before_softmax,
-#             softmax_temperature=1.0,
-#             categorical_features_indices=categorical_features_indices,
-#             fit_mode="low_memory",
-#         )
-
-# def sample(
-#     self, key: KeyArray, x_new: np.ndarray, x_prev: np.ndarray, y_prev: np.ndarray
-# ) -> tuple[np.ndarray, dict]:
-#     # Sample from predictive density
-#     self.fit(x_prev, y_prev)
-#     with warnings.catch_warnings():
-#         warnings.filterwarnings(
-#             "ignore",
-#             message="overflow encountered in cast",
-#             category=RuntimeWarning,
-#         )
-#         pred_output = self.predict(x_new, output_type="full")
-#     bardist = pred_output["criterion"]
-#     y_new = self.bardist_sample(key, bardist.icdf, pred_output["logits"])
-#     del pred_output["criterion"]
-#     pred_output["logits"] = pred_output["logits"].numpy()
-#     return np.squeeze(y_new), pred_output
-
-# def bardist_sample(
-#     self, key: KeyArray, bardist_icdf: Callable, logits: np.ndarray, t: float = 1.0
-# ) -> np.ndarray:
-#     """Samples values from the bar distribution. A modified version of
-#     https://github.com/PriorLabs/TabPFN/blob/main/src/tabpfn/model/bar_distribution.py#L576
-
-#     Temperature t.
-#     """
-#     p_cdf = jax.random.uniform(key, shape=logits.shape[:-1])
-#     return np.array(
-#         [bardist_icdf(logits[i, :] / t, p) for i, p in enumerate(p_cdf.tolist())],
-#     )
-
-
-# class TabPFNClassifierPPD(TabPFNClassifier):
-
-#     def __init__(
-#         self,
-#         categorical_x: list[bool],
-#         n_estimators: int = 8,  # this is the default in 2.1.3
-#         average_before_softmax: bool = False,
-#     ):
-#         categorical_features_indices = [i for i, c in enumerate(categorical_x) if c]
-#         super().__init__(
-#             n_estimators=n_estimators,
-#             average_before_softmax=average_before_softmax,
-#             softmax_temperature=1.0,
-#             categorical_features_indices=categorical_features_indices,
-#             fit_mode="low_memory",
-#         )
-
-# def sample(
-#     self, key: KeyArray, x_new: np.ndarray, x_prev: np.ndarray, y_prev: np.ndarray
-# ) -> tuple[np.ndarray, dict]:
-#     self.fit(x_prev, y_prev)
-#     probs_new = self.predict_proba(x_new).squeeze()
-#     idx_new = jax.random.choice(key, a=self.classes_.size, p=probs_new)
-#     y_new = self.classes_[idx_new]
-
-#     # we use jax to sample from a categorical distribution in the PPD
-#     # resampling step.
-#     y_new = y_new.squeeze() if isinstance(y_new, np.ndarray) else y_new
-#     return y_new, {"probs": probs_new}
 
 
 def build_g_hat_logreg(clf, X, y, x_grid):
@@ -212,3 +133,273 @@ def build_g_hat_linreg(clf, X, y, x_grid, y_star):
 
     return g_hat
 
+
+def assert_ppd_args_shape(x_new, x_prev, y_prev):
+    assert x_new.ndim == 2, "x_new must be 2D array"
+    assert x_prev.ndim == 2, "x_prev must be 2D array"
+    assert y_prev.ndim == 1, "y_prev must be 1D array"
+    assert (
+        x_prev.shape[0] == y_prev.shape[0]
+    ), "x_prev and y_prev must have same number of samples"
+    assert (
+        x_prev.shape[1] == x_new.shape[1]
+    ), "x_prev and x_new must have same number of features"
+    assert y_prev.ndim == 1, "y_prev must be 1D array"
+
+
+class TabPFNRegressorPPD(TabPFNRegressor):
+
+    def __init__(self, *args, y_star: float = 3.0, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.y_star = y_star
+
+    def sample(
+        self,
+        rng: Generator,
+        x_new: np.ndarray,
+        x_prev: np.ndarray,
+        y_prev: np.ndarray,
+        size: int = 1,
+    ) -> tuple[np.ndarray, dict]:
+        # Sample from predictive density
+        assert_ppd_args_shape(x_new, x_prev, y_prev)
+        self.fit(x_prev, y_prev)
+        with warnings.catch_warnings():
+            warnings.filterwarnings(
+                "ignore",
+                message="overflow encountered in cast",
+                category=RuntimeWarning,
+            )
+            pred_output = self.predict(x_new, output_type="full")
+        bardist = pred_output["criterion"]
+        logits = pred_output["logits"]
+        y_new = [self.bardist_sample(rng, bardist.icdf, logits) for _ in range(size)]
+        y_new = np.stack(y_new, axis=0)  # (n, num_x_new)
+
+        return y_new, {"bardist": bardist, "logits": logits.cpu().numpy()}
+
+    def bardist_sample(
+        self, rng: Generator, bardist_icdf: Callable, logits: torch.Tensor
+    ) -> np.ndarray:
+        """Samples values from the bar distribution. A modified version of
+        https://github.com/PriorLabs/TabPFN/blob/1b786570f5d5da3f3b9b6179c3fa43faf0c77894/src/tabpfn/architectures/base/bar_distribution.py#L581
+        Temperature t.
+        """
+        assert logits.ndim == 2, "logits must be 2D array (num_data, num_of_bins)"
+        p_cdf = rng.uniform(size=(logits.shape[0],))
+        return np.array(
+            [bardist_icdf(logits[i, :], p).cpu() for i, p in enumerate(p_cdf.tolist())]
+        )
+
+    def predict_event(
+        self,
+        x_new: np.ndarray,
+        x_prev: np.ndarray,
+        y_prev: np.ndarray,
+        # y_star: float = 3.0,
+    ) -> np.ndarray:
+        """
+        Return P(Y <= y_star | X = x_new, prev data).
+
+        Parameters
+        ----------
+        x_new : (m, d) array
+            Query covariates.
+        x_prev : (n, d) array
+            Historical covariates.
+        y_prev : (n,) array
+            Historical targets.
+        y_star : float, default=3.0
+            Event threshold.
+        """
+        assert_ppd_args_shape(x_new, x_prev, y_prev)
+        self.fit(x_prev, y_prev)
+        with warnings.catch_warnings():
+            warnings.filterwarnings(
+                "ignore",
+                message="overflow encountered in cast",
+                category=RuntimeWarning,
+            )
+            pred_output = self.predict(x_new, output_type="full")
+
+        logits = pred_output["logits"]
+        bardist = pred_output["criterion"]
+
+        # Evaluate the predictive CDF at y_star for each query point.
+        ys = torch.full(
+            (logits.shape[0], 1),
+            float(self.y_star),
+            dtype=torch.float32,
+        )
+
+        bardist.borders = bardist.borders.cpu()
+        cdf_vals = bardist.cdf(logits.cpu(), ys).squeeze(-1)
+        return cdf_vals.numpy()
+
+
+# %%
+
+
+class TabPFNClassifierPPD(TabPFNClassifier):
+
+    def sample(
+        self,
+        rng: Generator,
+        x_new: np.ndarray,
+        x_prev: np.ndarray,
+        y_prev: np.ndarray,
+        size: int = 1,
+    ) -> tuple[np.ndarray, dict]:
+        assert_ppd_args_shape(x_new, x_prev, y_prev)
+        self.fit(x_prev, y_prev)
+        probs_new = self.predict_proba(x_new).squeeze()
+
+        idx_new = [rng.choice(a=self.classes_.size, p=p, size=size) for p in probs_new]
+        y_new = np.stack(
+            [self.classes_[idx] for idx in idx_new], axis=1
+        )  # (n, num_x_new)
+
+        return y_new, {"probs": probs_new}
+
+    def predict_event(
+        self,
+        x_new: np.ndarray,
+        x_prev: np.ndarray,
+        y_prev: np.ndarray,
+    ) -> np.ndarray:
+        """Return P(Y = 1 | X = x_new, prev data)."""
+        assert_ppd_args_shape(x_new, x_prev, y_prev)
+        self.fit(x_prev, y_prev)
+        probs = self.predict_proba(x_new)
+
+        # Identify the column corresponding to the positive class label.
+        class_idx = np.where(self.classes_ == 1)[0]
+        if class_idx.size == 0:
+            raise ValueError("Positive class label '1' not found in TabPFN classes_.")
+
+        return probs[:, class_idx[0]].squeeze()
+
+
+# %%
+
+
+def compute_gn(clf, x_grid, x_prev, y_prev):
+    # return gn
+    # return a 1d array of shape (m,)
+    assert_ppd_args_shape(x_grid, x_prev, y_prev)
+
+    # Guard against degenerate or low data
+    if isinstance(clf, TabPFNClassifierPPD):
+        if np.min(y_prev) == np.max(y_prev):
+            return float(y_prev[0])
+
+    # Guard against degenerate or low data
+    if isinstance(clf, TabPFNRegressorPPD):
+        if y_prev.shape[0] < 2 or np.unique(y_prev).size < 2:
+            return float(np.mean(y_prev <= clf.y_star))
+
+    clf.fit(x_prev, y_prev)
+    return clf.predict_event(x_new=x_grid, x_prev=x_prev, y_prev=y_prev)
+
+
+def sample_gn_plus_1(rng, clf, x_grid, x_prev, y_prev, size=100):
+    # draw g_{n+1}
+    # return a 2d array of shape (mc_samples, m)
+    assert_ppd_args_shape(x_grid, x_prev, y_prev)
+    x_plus_1 = x_prev[rng.choice(x_prev.shape[0], size=size, replace=True)]
+    y_plus_1, _ = clf.sample(
+        rng=rng, x_new=x_plus_1, x_prev=x_prev, y_prev=y_prev, size=1
+    )
+    y_plus_1 = y_plus_1.squeeze()
+
+    assert x_plus_1.shape[0] == y_plus_1.shape[0]
+    assert x_plus_1.shape[0] == size
+    assert y_plus_1.ndim == 1
+    prob_event = [
+        clf.predict_event(
+            x_new=x_grid,
+            x_prev=np.vstack([x_prev, x_plus_1[i : i + 1]]),
+            y_prev=np.hstack([y_prev, y_plus_1[i : i + 1]]),
+        )
+        for i in range(size)
+    ]
+    return np.stack(prob_event, axis=0)
+
+
+# gn_plus_1 = sample_gn_plus_1(
+#     rng=rng, clf=clf, x_grid=x_grid, x_prev=x_prev, y_prev=y_prev, size=size
+# )  # (mc_samples, m)
+# gn = compute_gn(clf=clf, x_grid=x_grid, x_prev=x_prev, y_prev=y_prev)  # (m,)
+# n = x_prev.shape[0]
+
+
+def compute_un(gn, gn_plus_1, n, type="simultaneous"):
+    assert gn_plus_1.ndim == 2, "gn_plus_1 must be 2D array (mc_samples, m)"
+    assert gn.ndim == 1, "gn must be 1D array (m,)"
+    assert gn_plus_1.shape[1] == gn.shape[0], "gn_plus_1 and gn shape mismatch"
+
+    diff = gn_plus_1 - gn  # (mc_samples, m)
+    if type == "pointwise":
+        # return shape
+        return np.mean(((n + 1) * diff) ** 2, axis=0)  # (m,)
+    elif type == "simultaneous":
+        outer = np.einsum("ij,ik->ijk", diff, diff)
+        return np.mean((n + 1) ** 2 * outer, axis=0)  # (m, m)
+
+
+def compute_vn(g0_to_gn, type="simultaneous"):
+    assert g0_to_gn.ndim == 2, "g0_to_gn must be 2D array (n+1, m)"
+
+    n = g0_to_gn.shape[0] - 1
+    delta = g0_to_gn[2:, :] - g0_to_gn[1:-1, :]  # (n-1, m)
+    k_sq = np.arange(2, n + 1) ** 2  # (n-1,)
+
+    if type == "pointwise":
+        # v_n(x_j) = (1/(n-1)) * sum k^2 * Δ_k(x_j)^2
+        return np.mean(k_sq[:, None] * (delta**2), axis=0)
+    elif type == "simultaneous":
+        # v_n(x) = (1/(n-1)) * sum k^2 * Δ_k(x) Δ_k(x)^T
+        outer = np.einsum("ij,ik->ijk", delta, delta)  # (n-1, m, m)
+        return np.mean(k_sq[:, None, None] * outer, axis=0)  # (m, m)
+
+
+def compute_g0_to_gn(clf, x_grid, x_prev, y_prev):
+    """
+    Construct the sequence k ↦ v_k(x) mirroring build_g_hat_logreg,
+    but leveraging compute_gn for probability evaluation.
+
+    Parameters
+    ----------
+    clf : TabPFNClassifierPPD-like
+        Must expose `fit` and `predict_event`.
+    x_grid : (m, d) array
+        Grid of covariate values.
+    x_prev : (n, d) array
+        Historical covariates.
+    y_prev : (n,) array
+        Historical binary labels.
+
+    Returns
+    -------
+    g0_to_gn : (n+1, m) array
+        g0_to_gn[k, j] = P(Y=1 | X=x_grid[j], z_{1:k}), with g0_to_gn[0,:] = NaN.
+    """
+    assert_ppd_args_shape(x_grid, x_prev, y_prev)
+
+    n = x_prev.shape[0]
+    m = x_grid.shape[0]
+    g0_to_gn = np.empty((n + 1, m), dtype=np.float32)
+    g0_to_gn[0, :] = np.nan
+
+    for k in trange(1, n + 1):
+        if isinstance(clf, TabPFNClassifier):
+            y_prefix = y_prev[:k]
+            if np.min(y_prefix) == np.max(y_prefix):
+                g0_to_gn[k, :] = float(y_prefix[0])
+                continue
+
+        g0_to_gn[k, :] = compute_gn(
+            clf=clf, x_grid=x_grid, x_prev=x_prev[:k], y_prev=y_prev[:k]
+        )
+
+    return g0_to_gn
