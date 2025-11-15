@@ -18,42 +18,64 @@ parser.add_argument("--seed", type=int, default=0)
 parser.add_argument("--n_est", type=int, default=8)
 parser.add_argument("--n", type=int, default=100)
 parser.add_argument("--mc_samples", type=int, default=1000)
+parser.add_argument("--x_design", type=str, default="one_gap")
 args = parser.parse_args()
 
 
 n = args.n
-m = 100                         # size of x_grid
+m = 100  # size of x_grid
+x_grid = np.linspace(-10, 10, m).reshape(-1, 1)
 mc_samples = args.mc_samples
-setup = args.setup              # linreg or probit
+setup = args.setup  # linreg or probit
 seed = args.seed
 tabpfn_n_estimators = args.n_est
 tabpfn_average_before_softmax = True
 
 torch.manual_seed(8655 + seed)
 rng = np.random.default_rng(1907 + seed)
-rng_others, rng_data = rng.spawn(2)
+rng_others, rng_setup = rng.spawn(2)
 
-if setup == "linreg":
-    y_star = 3.0
-    savedir = f"outputs/coverage/setup=linreg y_star={y_star} n={n} m={m} n_est={tabpfn_n_estimators} seed={seed}"
-    X, y, x_grid, true_curve, title = data.load_syn_linear_gaussian_regression(
-        n=n, m=m, y_star=y_star, design="iid", rng=rng_data
-    )
+
+# convert setup (kebab-case) to Camalcase and ensure PPD suffix
+setup_name = utils.kebab_to_camel(args.setup)
+try:
+    Setup = getattr(data, setup_name)
+    setup = Setup(args.n, rng_setup, args.x_design)
+except AttributeError:
+    raise ValueError(f"Data {setup_name} not found in data module")
+
+
+REGRESSION = [
+    "gaussian-linear",
+    "gaussian-linear-dependent-error",
+    "gamma-linear",
+    "gaussian-sine",
+]
+
+CLASSIFICATION = [
+    "mixture-probit",
+    "poisson-linear",
+]
+
+
+if args.setup in REGRESSION:
+    y_star = 0.0
+    savedir = f"outputs/coverage/setup={args.setup} y_star={y_star} x_design={args.x_design} n={n} m={m} n_est={tabpfn_n_estimators} seed={seed}"
     clf = TabPFNRegressorPPD(
+        y_star=y_star,
         n_estimators=tabpfn_n_estimators,
         average_before_softmax=tabpfn_average_before_softmax,
         softmax_temperature=1.0,
         fit_mode="low_memory",
         model_path="tabpfn-model/tabpfn-v2-regressor.ckpt",
     )
-elif setup == "probit":
-    savedir = f"outputs/coverage/setup=probit n={n} m={m} n_est={tabpfn_n_estimators} seed={seed}"
-    X, y, x_grid, true_curve, title = data.load_syn_mixture_probit(
-        n=n, m=m, design="iid", rng=rng_data
-    )
+elif args.setup in CLASSIFICATION:
+    y_star = 1
+    savedir = f"outputs/coverage/setup={args.setup} y_star={y_star} x_design={args.x_design} n={n} m={m} n_est={tabpfn_n_estimators} seed={seed}"
     clf = TabPFNClassifierPPD(
+        y_star=y_star,
         n_estimators=tabpfn_n_estimators,
-        average_before_softmax=True,
+        average_before_softmax=tabpfn_average_before_softmax,
         softmax_temperature=1.0,
         fit_mode="low_memory",
         model_path="tabpfn-model/tabpfn-v2-classifier.ckpt",
@@ -61,6 +83,8 @@ elif setup == "probit":
 else:
     raise ValueError(f"Unknown data {data}")
 
+X = setup.X
+y = setup.y
 
 logger.remove()  # remove default logger
 log_format = "{time} - {level} - {message}"
@@ -72,7 +96,7 @@ logger.info(f"Git hash: {utils.githash()}")
 
 utils.write_to_local(
     f"{savedir}/data.pickle",
-    {"X": X, "y": y, "x_grid": x_grid, "true_curve": true_curve, "title": title},
+    {"setup": setup, "x_grid": x_grid},
 )
 
 start = timer()

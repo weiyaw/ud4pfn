@@ -29,6 +29,14 @@ import data
 #     {"X": X, "y": y, "x_grid": x_grid, "true_curve": true_curve, "title": title},
 # )
 
+LOGISTIC_REGRESSION = [
+    "syn_mixture_probit",
+]
+
+LINEAR_REGRESSION = [
+    "syn_linear_gaussian_regression",
+]
+
 
 @hydra.main(version_base=None, config_path="conf", config_name="forward")
 def main(cfg: DictConfig):
@@ -47,10 +55,16 @@ def main(cfg: DictConfig):
     rng = np.random.default_rng(1907 + cfg.seed)
     rng_others, rng_data = rng.spawn(2)
 
-    # Original iid design
-    X, y, x_grid, true_curve, title = data.load_syn_linear_gaussian_regression(
-        n=n, m=m, design="iid", rng=rng_data
-    )
+    if cfg.data == "syn_linear_gaussian_regression":
+        X, y, x_grid, true_curve, title = data.load_syn_linear_gaussian_regression(
+            n=n, m=m, design="iid", rng=rng_data
+        )
+    elif cfg.data == "syn_mixture_probit":
+        X, y, x_grid, true_curve, title = data.load_syn_mixture_probit(
+            n=n, m=m, design="iid", rng=rng_data
+        )
+    else:
+        raise ValueError
 
     utils.write_to_local(
         f"{savedir}/data.pickle",
@@ -58,7 +72,7 @@ def main(cfg: DictConfig):
     )
 
     start = timer()
-    if cfg.task == "regression":
+    if cfg.data in LINEAR_REGRESSION:
         clf = TabPFNRegressor(
             n_estimators=64,
             average_before_softmax=True,
@@ -66,7 +80,7 @@ def main(cfg: DictConfig):
             fit_mode="low_memory",
         )
         g_hat = forward.build_g_hat_linreg(clf, X, y, x_grid, 0.5)
-    elif cfg.task == "classification":
+    elif cfg.data in LOGISTIC_REGRESSION:
         clf = TabPFNClassifier(
             n_estimators=1,
             average_before_softmax=True,
