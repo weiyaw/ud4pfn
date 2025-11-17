@@ -276,13 +276,14 @@ class TabPFNClassifierPPD(TabPFNClassifier):
         self.fit(x_prev, y_prev)
         probs = self.predict_proba(x_new)
 
-        assert self.y_star in self.classes_, "y_star must be in TabPFN classes_"
-        # Identify the column corresponding to the positive class label.
-        class_idx = np.where(self.classes_ == self.y_star)[0]
-        # if class_idx.size == 0:
-        #     raise ValueError("Positive class label '1' not found in TabPFN classes_.")
-
-        return probs[:, class_idx[0]].squeeze()
+        if self.y_star in self.classes_:
+            # Identify the column corresponding to the positive class label.
+            class_idx = np.where(self.classes_ == self.y_star)[0]
+            event_prob = probs[:, class_idx[0]].squeeze()
+        else:
+            # If y_star is not supported, return zero probability
+            event_prob = np.zeros(probs.shape[0], dtype=probs.dtype)
+        return event_prob
 
 
 # %%
@@ -326,7 +327,7 @@ def sample_gn_plus_1(rng, clf, x_grid, x_prev, y_prev, size=100):
             x_prev=np.vstack([x_prev, x_plus_1[i : i + 1]]),
             y_prev=np.hstack([y_prev, y_plus_1[i : i + 1]]),
         )
-        for i in range(size)
+        for i in trange(size)
     ]
     return np.stack(prob_event, axis=0)
 
