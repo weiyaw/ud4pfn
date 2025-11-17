@@ -375,6 +375,7 @@ def compute_g0_to_gn(clf, x_grid, x_prev, y_prev):
 
 
 def compute_un(gn, gn_plus_1, n, type="simultaneous"):
+    # the red one
     assert gn_plus_1.ndim == 2, "gn_plus_1 must be 2D array (mc_samples, m)"
     assert gn.ndim == 1, "gn must be 1D array (m,)"
     assert gn_plus_1.shape[1] == gn.shape[0], "gn_plus_1 and gn shape mismatch"
@@ -389,16 +390,17 @@ def compute_un(gn, gn_plus_1, n, type="simultaneous"):
 
 
 def compute_vn(g0_to_gn, type="simultaneous"):
+    # the original
     assert g0_to_gn.ndim == 2, "g0_to_gn must be 2D array (n+1, m)"
 
     n = g0_to_gn.shape[0] - 1
     delta = g0_to_gn[2:, :] - g0_to_gn[1:-1, :]  # (n-1, m)
-    k_sq = np.arange(2, n + 1) ** 2  # (n-1,)
+    k = np.arange(2, n + 1)  # (n-1,)
 
     if type == "pointwise":
         # v_n(x_j) = (1/(n-1)) * sum k^2 * Δ_k(x_j)^2
-        return np.mean(k_sq[:, None] * (delta**2), axis=0)
+        return np.mean((k[:, None] * delta)**2, axis=0)
     elif type == "simultaneous":
         # v_n(x) = (1/(n-1)) * sum k^2 * Δ_k(x) Δ_k(x)^T
         outer = np.einsum("ij,ik->ijk", delta, delta)  # (n-1, m, m)
-        return np.mean(k_sq[:, None, None] * outer, axis=0)  # (m, m)
+        return np.mean(k[:, None, None]**2 * outer, axis=0)  # (m, m)

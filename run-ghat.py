@@ -7,10 +7,9 @@ import numpy as np
 import torch
 from timeit import default_timer as timer
 
-# from tabpfn import TabPFNClassifier
 import utils
-import forward
-from forward import TabPFNClassifierPPD, TabPFNRegressorPPD
+import credible_set
+from credible_set import TabPFNClassifierPPD, TabPFNRegressorPPD
 
 parser = argparse.ArgumentParser()
 parser.add_argument("--setup", type=str, default="linreg")
@@ -47,19 +46,25 @@ except AttributeError:
 
 REGRESSION = [
     "gaussian-linear",
+    "gaussian-polynomial",
     "gaussian-linear-dependent-error",
     "gamma-linear",
     "gaussian-sine",
 ]
 
 CLASSIFICATION = [
-    "mixture-probit",
+    "probit-mixture",
     "poisson-linear",
 ]
 
+if args.setup == "gamma-linear":
+    y_star = 4.0
+elif args.setup in CLASSIFICATION:
+    y_star = 1
+else:
+    y_star = 0.0
 
 if args.setup in REGRESSION:
-    y_star = 0.0
     savedir = f"outputs/coverage/setup={args.setup} y_star={y_star} x_design={args.x_design} n={n} m={m} n_est={tabpfn_n_estimators} seed={seed}"
     clf = TabPFNRegressorPPD(
         y_star=y_star,
@@ -70,7 +75,6 @@ if args.setup in REGRESSION:
         model_path="tabpfn-model/tabpfn-v2-regressor.ckpt",
     )
 elif args.setup in CLASSIFICATION:
-    y_star = 1
     savedir = f"outputs/coverage/setup={args.setup} y_star={y_star} x_design={args.x_design} n={n} m={m} n_est={tabpfn_n_estimators} seed={seed}"
     clf = TabPFNClassifierPPD(
         y_star=y_star,
@@ -100,16 +104,16 @@ utils.write_to_local(
 )
 
 start = timer()
-g0_to_gn = forward.compute_g0_to_gn(clf, x_grid, X, y)
+g0_to_gn = credible_set.compute_g0_to_gn(clf, x_grid, X, y)
 utils.write_to_local(f"{savedir}/g0_to_gn.pickle", g0_to_gn)
 logger.info(f"Built g0_to_gn in {timer() - start:.2f} seconds")
 
 start = timer()
-gn = forward.compute_gn(clf, x_grid, X, y)
+gn = credible_set.compute_gn(clf, x_grid, X, y)
 utils.write_to_local(f"{savedir}/gn.pickle", gn)
 logger.info(f"Built gn in {timer() - start:.2f} seconds")
 
 start = timer()
-gn_plus_1 = forward.sample_gn_plus_1(rng_others, clf, x_grid, X, y, size=mc_samples)
+gn_plus_1 = credible_set.sample_gn_plus_1(rng_others, clf, x_grid, X, y, size=mc_samples)
 utils.write_to_local(f"{savedir}/gn_plus_1.pickle", gn_plus_1)
 logger.info(f"Built gn_plus_1 in {timer() - start:.2f} seconds")
