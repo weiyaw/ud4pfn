@@ -1,29 +1,32 @@
 defaults:
   - _self_
 
-data: "syn_linear_gaussian_regression"
+setup: "gaussian-linear"
 data_size: 100
 x_grid_size: 100
+x_design: "one-gap"
 seed: 999
 
 n_estimators: 64
 average_before_softmax: True
+mc_samples: 1000                # num of monte carlo samples in u_{n+1} estimator
 
 
-date: ${now:%Y-%m-%d}
+id: ${now:%Y-%m-%d}
 lastrun: ${now:%Y-%m-%dT%H:%M:%S%z}
 git: ${githash:}
 
 hydra:
   run:
-    dir: "./outputs/${date}/\
-      data=${data}
+    dir: "./outputs/${id}/\
+      setup=${setup}
+      x_design=${x_design}
+      n_est=${n_estimators}
       n=${data_size}
       m=${x_grid_size}
-      n_est=${n_estimators}
       seed=${seed}"
+
   sweep:
     dir: ${hydra.run.dir}
     subdir: .
 
-# rec_length=${recursion_length}

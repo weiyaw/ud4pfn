@@ -204,13 +204,13 @@ class Data:
         # get y from subclass and compute true_curve separately via get_true_curve
         self.y = self.get_y(rng_y, self.X)
 
-    def get_x(self, rng, n, design="one_gap") -> np.ndarray:
+    def get_x(self, rng, n, design="one-gap") -> np.ndarray:
         # uniform between -10 and 10. no data in the gaps
-        if design == "one_gap":
+        if design == "one-gap":
             xs1 = rng.uniform(-8, -2, n // 2)
             xs2 = rng.uniform(2, 8, n - n // 2)
             xs = np.concatenate([xs1, xs2])
-        elif design == "two_gap":
+        elif design == "two-gap":
             xs1 = rng.uniform(-10, -4, n // 3)
             xs2 = rng.uniform(0, 2, n // 3)
             xs3 = rng.uniform(6, 10, n - 2 * (n // 3))
