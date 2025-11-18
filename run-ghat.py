@@ -44,13 +44,13 @@ def main(cfg: DictConfig):
     logging.info(f"Hydra version: {hydra.__version__}")
     logging.info(OmegaConf.to_yaml(cfg))
 
-    n = cfg.data_size
-    m = cfg.x_grid_size
+    n = int(cfg.data_size)
+    m = int(cfg.x_grid_size)
     x_design = cfg.x_design
-    mc_samples = cfg.mc_samples
+    mc_samples = int(cfg.mc_samples)
     setup_name = cfg.setup
-    seed = cfg.seed
-    tabpfn_n_estimators = cfg.n_estimators
+    seed = int(cfg.seed)
+    tabpfn_n_estimators = int(cfg.n_estimators)
     tabpfn_average_before_softmax = cfg.average_before_softmax
     x_grid = np.linspace(-10, 10, m).reshape(-1, 1)
 
