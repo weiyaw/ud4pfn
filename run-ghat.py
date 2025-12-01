@@ -17,25 +17,7 @@ import credible_set
 from credible_set import TabPFNClassifierPPD, TabPFNRegressorPPD
 import data
 
-
-REGRESSION = [
-    "gaussian-linear",
-    "gaussian-polynomial",
-    "gaussian-linear-dependent-error",
-    "gamma-linear",
-    "gaussian-sine",
-]
-
-CLASSIFICATION = [
-    "probit-mixture",
-    "poisson-linear",
-]
-
-Y_STAR_MAP = {
-    **{k: 0.0 for k in REGRESSION},
-    **{k: 1 for k in CLASSIFICATION},
-    "gamma-linear": 4.0,
-}
+from constants import REGRESSION, CLASSIFICATION, Y_STAR_MAP
 
 
 @hydra.main(version_base=None, config_path="conf", config_name="ghat")

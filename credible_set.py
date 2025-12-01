@@ -5,6 +5,7 @@ from typing import Callable
 import torch
 
 import numpy as np
+from scipy.stats import norm
 from numpy.random import Generator
 from tqdm import trange
 
@@ -400,8 +401,43 @@ def compute_vn(g0_to_gn, type="simultaneous"):
 
     if type == "pointwise":
         # v_n(x_j) = (1/(n-1)) * sum k^2 * Δ_k(x_j)^2
-        return np.mean((k[:, None] * delta)**2, axis=0)
+        return np.mean((k[:, None] * delta) ** 2, axis=0)
     elif type == "simultaneous":
         # v_n(x) = (1/(n-1)) * sum k^2 * Δ_k(x) Δ_k(x)^T
         outer = np.einsum("ij,ik->ijk", delta, delta)  # (n-1, m, m)
-        return np.mean(k[:, None, None]**2 * outer, axis=0)  # (m, m)
+        return np.mean(k[:, None, None] ** 2 * outer, axis=0)  # (m, m)
+
+
+def build_pointwise_band(mean, cov, alpha: float = 0.05):
+    se = np.sqrt(cov)
+    z = norm.ppf(1 - alpha / 2)
+    # lower = np.clip(mean - z * se, 0.0, 1.0)
+    # upper = np.clip(mean + z * se, 0.0, 1.0)
+    lower = mean - z * se
+    upper = mean + z * se
+    return {"mean": mean, "lower": lower, "upper": upper, "se": se}
+
+
+def build_simultaneous_band(mean, cov, alpha: float = 0.05):
+    se = np.sqrt(np.diag(cov))
+    # multivariate CLT draws
+    rng = np.random.default_rng(501938)
+    draws = rng.multivariate_normal(mean, cov, size=1000)
+    # sup-norm calibration
+    se_safe = se.copy()
+    se_safe[se_safe == 0] = np.inf
+    Z = (draws - mean[None, :]) / se_safe[None, :]
+    T = np.max(np.abs(Z), axis=1)
+    c_alpha = float(np.quantile(T, 1 - alpha))
+    # lower = np.clip(mean - c_alpha * se, 0.0, 1.0)
+    # upper = np.clip(mean + c_alpha * se, 0.0, 1.0)
+    lower = mean - c_alpha * se
+    upper = mean + c_alpha * se
+    return {
+        "mean": mean,
+        "lower": lower,
+        "upper": upper,
+        "c_alpha": c_alpha,
+        "se": se,
+        "draws": draws,
+    }
