@@ -305,7 +305,6 @@ def compute_gn(clf, x_grid, x_prev, y_prev):
         if y_prev.shape[0] < 2 or np.unique(y_prev).size < 2:
             return float(np.mean(y_prev <= clf.y_star))
 
-    clf.fit(x_prev, y_prev)
     return clf.predict_event(x_new=x_grid, x_prev=x_prev, y_prev=y_prev)
 
 

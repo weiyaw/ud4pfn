@@ -1,6 +1,5 @@
 # %%
 import os
-from tabpfn import TabPFNClassifier, TabPFNRegressor
 import warnings
 from typing import Callable
 import torch

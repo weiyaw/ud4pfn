@@ -9,7 +9,7 @@ shuffle_data: False
 seed: 999
 
 n_estimators: 64
-average_before_softmax: True
+average_before_softmax: False
 mc_samples: 1000                # num of monte carlo samples in u_{n+1} estimator
 
 
@@ -22,7 +22,7 @@ hydra:
     dir: "./outputs/${id}/\
       setup=${setup}
       x_design=${x_design}
-      shuffle={shuffle_data}
+      shuffle=${shuffle_data}
       n_est=${n_estimators}
       n=${data_size}
       m=${x_grid_size}
