@@ -196,13 +196,24 @@ class Data:
     y: np.ndarray
     x_design: str
 
-    def __init__(self, n: int, rng: np.random.Generator, design: str = "one_gap"):
+    def __init__(
+        self,
+        n: int,
+        rng: np.random.Generator,
+        shuffle: bool = False,
+        design: str = "one_gap",
+    ):
         self.rng = rng
         self.x_design = design
-        rng_x, rng_y = rng.spawn(2)
+        rng_x, rng_y, rng = rng.spawn(3)
         self.X = self.get_x(rng_x, n, design)
         # get y from subclass and compute true_curve separately via get_true_curve
         self.y = self.get_y(rng_y, self.X)
+
+        if shuffle:
+            perm = rng.permutation(n)
+            self.X = self.X[perm]
+            self.y = self.y[perm]
 
     def get_x(self, rng, n, design="one-gap") -> np.ndarray:
         # uniform between -10 and 10. no data in the gaps

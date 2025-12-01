@@ -5,6 +5,7 @@ setup: "gaussian-linear"
 data_size: 100
 x_grid_size: 100
 x_design: "one-gap"
+shuffle_data: False
 seed: 999
 
 n_estimators: 64
@@ -21,6 +22,7 @@ hydra:
     dir: "./outputs/${id}/\
       setup=${setup}
       x_design=${x_design}
+      shuffle={shuffle_data}
       n_est=${n_estimators}
       n=${data_size}
       m=${x_grid_size}

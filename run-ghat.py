@@ -29,6 +29,7 @@ def main(cfg: DictConfig):
     n = int(cfg.data_size)
     m = int(cfg.x_grid_size)
     x_design = cfg.x_design
+    shuffle_data = cfg.shuffle_data
     mc_samples = int(cfg.mc_samples)
     setup_name = cfg.setup
     seed = int(cfg.seed)
@@ -43,7 +44,7 @@ def main(cfg: DictConfig):
     # convert setup (kebab-case) to Camalcase and ensure PPD suffix
     try:
         Setup = getattr(data, utils.kebab_to_camel(setup_name))
-        setup = Setup(n, rng_setup, x_design)
+        setup = Setup(n, rng_setup, shuffle_data, x_design)
     except AttributeError:
         raise ValueError(f"Data {setup_name} not found in data module")
 
