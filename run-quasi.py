@@ -8,6 +8,7 @@ from tqdm.auto import tqdm
 import logging
 import hydra
 from omegaconf import DictConfig, OmegaConf
+from timeit import default_timer as timer
 import utils
 import os
 import data
@@ -25,7 +26,7 @@ def inner_mc_bias(clf, X, y, x_new, m_inner, rng):
     P_t = clf.predict_event(x_new, X, y)
 
     diffs = []
-    for _ in range(m_inner):
+    for _ in trange(m_inner, desc="inner MC", leave=False):
         # branch with a single new label at same x_new
         y_branch, _ = clf.sample(rng, x_new, X, y)
         X_br = np.vstack([X, x_new])
@@ -42,7 +43,7 @@ def run_single_outer_path(rng, X0, y0, k_samp, m_inner, x_new, tag, savedir, clf
     bias_vals = []
     prev_k = 0
     X, y = X0.copy(), y0.copy()
-    for k in tqdm(k_samp, desc=f"{tag}: checkpoints"):
+    for k in tqdm(k_samp, desc=f"{tag}", position=0):
         # grow history to length k by repeatedly appending (x_new, y_new)
         for _ in range(prev_k, k):
             y_new, _ = clf.sample(rng, x_new, X, y)
@@ -134,7 +135,7 @@ def main(cfg: DictConfig):
     # We run multiple outer paths (r_outer). For each path, we simulate
     # adding data points (up to n_horizon) and compute the delta/bias term.
     bias_per_path = []
-    for r in trange(r_outer, desc="outer paths", leave=False):
+    for r in range(r_outer):
         tag = f"outer{r}"
         chk_path = savedir / f"{tag}.npy"
         if chk_path.exists():
@@ -142,6 +143,7 @@ def main(cfg: DictConfig):
             bias_per_path.append(np.load(chk_path))
         else:
             logging.info(f"Fresh run for {tag}.")
+            start = timer()
             bias_per_path.append(
                 run_single_outer_path(
                     rng_outer,
@@ -155,6 +157,7 @@ def main(cfg: DictConfig):
                     clf=clf,
                 )
             )
+            logging.info(f"Built {tag} in {timer() - start:.2f} seconds")
 
     bias_per_path = np.vstack(bias_per_path)  # (r_outer, len(k_samp))
     bias_mean = bias_per_path.mean(axis=0)

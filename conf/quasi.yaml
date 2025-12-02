@@ -5,7 +5,7 @@ setup: "logistic-linear"
 x_design: "uniform-1d"
 shuffle_data: False
 
-n_estimators: 16
+n_estimators: 1
 n0: 25
 n_horizon: 1000
 r_outer: 50
@@ -18,7 +18,7 @@ git: ${githash:}
 
 hydra:
   run:
-    dir: "./outputs/${id}/quasi setup=${setup} n0=${n0} n_est=${n_estimators} seed=${seed}"
+    dir: "./outputs/${id}/quasi setup=${setup} x_design=${x_design} n_est=${n_estimators} n0=${n0} seed=${seed}"
   sweep:
     dir: ${hydra.run.dir}
     subdir: .
