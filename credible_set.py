@@ -257,7 +257,7 @@ class TabPFNClassifierPPD(TabPFNClassifier):
     ) -> tuple[np.ndarray, dict]:
         assert_ppd_args_shape(x_new, x_prev, y_prev)
         self.fit(x_prev, y_prev)
-        probs_new = self.predict_proba(x_new).squeeze()
+        probs_new = self.predict_proba(x_new)
 
         idx_new = [rng.choice(a=self.classes_.size, p=p, size=size) for p in probs_new]
         y_new = np.stack(

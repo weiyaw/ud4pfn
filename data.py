@@ -226,9 +226,15 @@ class Data:
             xs2 = rng.uniform(0, 2, n // 3)
             xs3 = rng.uniform(6, 10, n - 2 * (n // 3))
             xs = np.concatenate([xs1, xs2, xs3])
+        elif design == "uniform-1d":
+            xs = rng.uniform(-10, 10, n)
+        elif design == "uniform-2d":
+            xs = rng.uniform(-10, 10, (n, 2))
         else:
             raise ValueError(f"Unknown design='{design}'")
-        return xs[:, None]
+        if xs.ndim == 1:
+            xs = xs[:, None]
+        return xs
 
     @abstractmethod
     def get_y(self, rng, x) -> np.ndarray:
@@ -246,8 +252,9 @@ class Data:
         assert self.X.ndim == 2 and self.X.shape[1] == 1
 
         plt.figure(figsize=(8, 5))
-        plt.scatter(self.X.ravel(), self.y, alpha=0.5, label="data")
-        x_grid = np.linspace(-10, 10, 200, dtype=np.float32)[:, None]
+        x = self.X[:, 0]
+        plt.scatter(x, self.y, alpha=0.5, label="data")
+        x_grid = np.linspace(x.min(), x.max(), 200, dtype=np.float32)[:, None]
         plt.title(f"{self.__class__.__name__} ({self.x_design} design)")
         plt.xlabel("X")
         plt.ylabel("y")
@@ -425,8 +432,39 @@ class PoissonLinear(Data):
         pmf = poisson.pmf(y_star, rate)
         return pmf.astype(np.float32)
 
+class Gamma(Data):
+    # good y_star = 2.5
 
-# %%
+    def get_y(self, rng, x):
+        # Gamma(shape=2, scale=2) rv independent of x
+        y = rng.gamma(2, 2, size=x.shape[0])
+        return y.astype(np.float32)
 
+    def get_true_event(self, x: np.ndarray, y_star: int) -> np.ndarray:
+        # return the P(y <= y_star | x) of Gamma(shape=2, scale=2)
+        cdf = gamma.cdf(y_star, a=2, scale=2)
+        return cdf.astype(np.float32)
 
-# %%
+class LogisticLinear(Data):
+    # good y_star = 1
+
+    def _params(self, x: np.ndarray) -> np.ndarray:
+        # P(Y=1|X) = sigmoid(a*x + b)
+        a = 0.2
+        b = 0.0
+        logits = a * x + b
+        p = 1.0 / (1.0 + np.exp(-logits))
+        return p.astype(np.float32)
+
+    def get_y(self, rng, x):
+        assert x.ndim == 2 and x.shape[1] == 1
+        p = self._params(x.ravel())
+        y = rng.binomial(n=1, p=p).astype(np.int32)
+        return y
+
+    def get_true_event(self, x: np.ndarray, y_star: int) -> np.ndarray:
+        p = self._params(x.ravel())
+        if y_star == 1:
+            return p
+        else:
+            return 1.0 - p

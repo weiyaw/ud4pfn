@@ -9,6 +9,7 @@ REGRESSION = [
 CLASSIFICATION = [
     "probit-mixture",
     "poisson-linear",
+    "logistic-linear",
 ]
 
 Y_STAR_MAP = {
