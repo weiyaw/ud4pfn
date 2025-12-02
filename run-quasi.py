@@ -22,7 +22,7 @@ def inner_mc_bias(clf, X, y, x_new, m_inner, rng):
     Monte Carlo estimate of | E_n[Δ_{n+1}] | for the event {y=0}.
     Here Δ_{n+1} = P_{n+1} - P_n with P_n = P(y=0 | x_new, G_n).
     """
-    P_t = float(clf.predict_event(x_new, X, y))
+    P_t = clf.predict_event(x_new, X, y)
 
     diffs = []
     for _ in range(m_inner):
@@ -31,7 +31,7 @@ def inner_mc_bias(clf, X, y, x_new, m_inner, rng):
         X_br = np.vstack([X, x_new])
         y_br = np.append(y, y_branch)
 
-        P_next_t = float(clf.predict_event(x_new, X_br, y_br))
+        P_next_t = clf.predict_event(x_new, X_br, y_br)
         diffs.append(P_next_t - P_t)
 
     return abs(np.mean(diffs))
