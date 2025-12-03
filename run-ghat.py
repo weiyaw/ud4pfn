@@ -18,6 +18,7 @@ import data
 
 from constants import REGRESSION, CLASSIFICATION, Y_STAR_MAP
 
+os.environ["TABPFN_DISABLE_TELEMETRY"] = "1"
 
 @hydra.main(version_base=None, config_path="conf", config_name="ghat")
 def main(cfg: DictConfig):

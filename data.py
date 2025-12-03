@@ -201,7 +201,7 @@ class Data:
         n: int,
         rng: np.random.Generator,
         shuffle: bool = False,
-        design: str = "one_gap",
+        design: str = "one-gap",
     ):
         self.rng = rng
         self.x_design = design
@@ -385,6 +385,31 @@ class GaussianSine(Data):
         return cdf.astype(np.float32)
 
 
+class PoissonLinear(Data):
+    # good y_star = 1
+
+    def _params(self, x: np.ndarray) -> np.ndarray:
+        # parabola: y = a(x+10)(x-10) = a(x^2 - 100)
+        # choose a > 0 for positive opening, scaled appropriately
+        a = 0.05
+        rate = a * (x**2 - 100.0) + 5.0  # shift up to keep positive
+        return rate.astype(np.float32)
+
+    def get_y(self, rng, x):
+        # linear function plus poisson noise
+        assert x.ndim == 2 and x.shape[1] == 1
+        rate = self._params(x.ravel())
+        # Poisson expects rate parameter (non-negative)
+        y = rng.poisson(rate)
+        return y.astype(np.int32)
+
+    def get_true_event(self, x: np.ndarray, y_star: int) -> np.ndarray:
+        # return the P(y <= y_star | x) of Poisson at rate=true_curve(x)
+        rate = self._params(x.ravel())
+        cdf = poisson.cdf(y_star, rate)
+        return cdf.astype(np.float32)
+
+
 class ProbitMixture(Data):
     # good y_star = 1
 
@@ -408,29 +433,48 @@ class ProbitMixture(Data):
             return (1.0 - p).astype(np.float32)
 
 
-class PoissonLinear(Data):
+class CategoricalLinear(Data):
+    # four categories: 0,1,2,3
     # good y_star = 1
 
     def _params(self, x: np.ndarray) -> np.ndarray:
-        # parabola: y = a(x+10)(x-10) = a(x^2 - 100)
-        # choose a > 0 for positive opening, scaled appropriately
-        a = 0.05
-        rate = a * (x**2 - 100.0) + 5.0  # shift up to keep positive
-        return rate.astype(np.float32)
+        # x is shape (n,)
+        # logits: (n, 4)
+        n = x.shape[0]
+        logits = np.zeros((n, 4), dtype=np.float32)
+
+        # Class 0: mostly in [-10, 0] -> center -5
+        logits[:, 0] = -1.0 * (x + 5.0) ** 2 / 10.0
+        # Class 1: mostly in [-5, 5] -> center 0
+        logits[:, 1] = -1.0 * (x) ** 2 / 10.0
+        # Class 2: mostly in [4, 10] -> center 7
+        logits[:, 2] = -1.0 * (x - 7.0) ** 2 / 5.0
+        # Class 3: mostly in [0, 8] -> center 4
+        logits[:, 3] = -1.0 * (x - 4.0) ** 2 / 8.0
+
+        # Softmax
+        max_logits = np.max(logits, axis=1, keepdims=True)
+        exp_logits = np.exp(logits - max_logits)
+        probs = exp_logits / np.sum(exp_logits, axis=1, keepdims=True)
+        return probs
 
     def get_y(self, rng, x):
-        # linear function plus poisson noise
+        # function to get logits, then softmax to get probabilities
         assert x.ndim == 2 and x.shape[1] == 1
-        rate = self._params(x.ravel())
-        # Poisson expects rate parameter (non-negative)
-        y = rng.poisson(rate)
+        probs = self._params(x.ravel())
+        n = probs.shape[0]
+
+        # Sample
+        cumprobs = np.cumsum(probs, axis=1)
+        r = rng.random((n, 1))
+        y = (r < cumprobs).argmax(axis=1)
         return y.astype(np.int32)
 
     def get_true_event(self, x: np.ndarray, y_star: int) -> np.ndarray:
-        # return the P(y = y_star | x) of Poisson at rate=true_curve(x)
-        rate = self._params(x.ravel())
-        pmf = poisson.pmf(y_star, rate)
-        return pmf.astype(np.float32)
+        # return the P(y = y_star | x)
+        probs = self._params(x.ravel())
+        return probs[:, y_star]
+
 
 class Gamma(Data):
     # good y_star = 2.5
@@ -444,6 +488,7 @@ class Gamma(Data):
         # return the P(y <= y_star | x) of Gamma(shape=2, scale=2)
         cdf = gamma.cdf(y_star, a=2, scale=2)
         return cdf.astype(np.float32)
+
 
 class LogisticLinear(Data):
     # good y_star = 1
@@ -468,3 +513,6 @@ class LogisticLinear(Data):
             return p
         else:
             return 1.0 - p
+
+
+# %%
