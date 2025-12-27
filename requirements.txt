@@ -1,5 +1,6 @@
 tabpfn==2.2.1
 torch==2.9.0
+jax
 numpy
 scipy
 pandas

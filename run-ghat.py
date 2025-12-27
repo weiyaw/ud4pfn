@@ -5,6 +5,8 @@ from typing import Callable
 import torch
 
 import numpy as np
+import jax
+import jax.random as jr
 import utils
 import logging
 from timeit import default_timer as timer
@@ -13,7 +15,7 @@ from omegaconf import DictConfig, OmegaConf
 import hydra
 
 import credible_set
-from credible_set import TabPFNClassifierPPD, TabPFNRegressorPPD
+from pred_rule import TabPFNClassifierPPD, TabPFNRegressorPPD
 import data
 
 from constants import REGRESSION, CLASSIFICATION, Y_STAR_MAP
@@ -38,13 +40,13 @@ def main(cfg: DictConfig):
     x_grid = np.linspace(-10, 10, m).reshape(-1, 1)
 
     torch.manual_seed(8655 + seed)
-    rng = np.random.default_rng(1907 + seed)
-    rng_others, rng_setup = rng.spawn(2)
+    key = jr.key(1907 + seed)
+    key_others, key_setup = jr.split(key)
 
     # convert setup (kebab-case) to Camalcase and ensure PPD suffix
     try:
         Setup = getattr(data, utils.kebab_to_camel(setup_name))
-        setup = Setup(n, rng_setup, shuffle_data, x_design)
+        setup = Setup(key_setup, n, shuffle_data, x_design)
     except AttributeError:
         raise ValueError(f"Data {setup_name} not found in data module")
 
@@ -95,7 +97,7 @@ def main(cfg: DictConfig):
 
     start = timer()
     gn_plus_1 = credible_set.sample_gn_plus_1(
-        rng_others, clf, x_grid, X, y, size=mc_samples
+        key_others, clf, x_grid, X, y, size=mc_samples
     )
     utils.write_to_local(f"{savedir}/gn_plus_1.pickle", gn_plus_1)
     logging.info(f"Built gn_plus_1 in {timer() - start:.2f} seconds")

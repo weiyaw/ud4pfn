@@ -1,4 +1,7 @@
 import numpy as np
+import jax
+import jax.numpy as jnp
+import jax.random as jr
 import torch
 import joblib
 import math
@@ -13,13 +16,13 @@ import utils
 import os
 import data
 
-from tabpfn import TabPFNClassifier
-from credible_set import TabPFNClassifierPPD, TabPFNRegressorPPD
+from pred_rule import TabPFNClassifierPPD, TabPFNRegressorPPD
 from constants import REGRESSION, CLASSIFICATION, Y_STAR_MAP
 
 os.environ["TABPFN_DISABLE_TELEMETRY"] = "1"
 
-def inner_mc_bias(clf, X, y, x_new, m_inner, rng):
+
+def inner_mc_bias(key, clf, X, y, x_new, m_inner):
     """
     Monte Carlo estimate of | E_n[Δ_{n+1}] | for the event {y=0}.
     Here Δ_{n+1} = P_{n+1} - P_n with P_n = P(y=0 | x_new, G_n).
@@ -27,9 +30,10 @@ def inner_mc_bias(clf, X, y, x_new, m_inner, rng):
     P_t = clf.predict_event(x_new, X, y)
 
     diffs = []
-    for _ in trange(m_inner, desc="inner MC", leave=False):
-        # branch with a single new label at same x_new
-        y_branch, _ = clf.sample(rng, x_new, X, y)
+    for i in trange(m_inner, desc="inner MC", leave=False):
+        # Derive subkey from base key using loop index i
+        subkey = jr.fold_in(key, i)
+        y_branch, _ = clf.sample(subkey, x_new, X, y)
         X_br = np.vstack([X, x_new])
         y_br = np.append(y, y_branch)
 
@@ -39,20 +43,26 @@ def inner_mc_bias(clf, X, y, x_new, m_inner, rng):
     return abs(np.mean(diffs))
 
 
-def run_single_outer_path(rng, X0, y0, k_samp, m_inner, x_new, clf):
+def run_single_outer_path(key, clf, X0, y0, k_samp, m_inner, x_new):
 
     bias_vals = []
     prev_k = 0
     X, y = X0.copy(), y0.copy()
+
     for k in tqdm(k_samp, desc="outer", position=0):
+        key_outer = jr.fold_in(key, k)
+        key_outer, key_growth = jr.split(key_outer)
+
         # grow history to length k by repeatedly appending (x_new, y_new)
-        for _ in range(prev_k, k):
-            y_new, _ = clf.sample(rng, x_new, X, y)
+        for j in range(prev_k, k):
+            subkey = jr.fold_in(key_growth, j)
+            y_new, _ = clf.sample(subkey, x_new, X, y)
             X = np.vstack([X, x_new])
             y = np.append(y, y_new)
 
         # conditional bias for event
-        b_k = inner_mc_bias(clf, X, y, x_new=x_new, m_inner=m_inner, rng=rng)
+        key_outer, subkey = jr.split(key_outer)
+        b_k = inner_mc_bias(subkey, clf, X, y, x_new=x_new, m_inner=m_inner)
         bias_vals.append(b_k)
         prev_k = k
 
@@ -78,8 +88,8 @@ def main(cfg: DictConfig):
     torch.set_num_threads(1)
 
     # reproducibility
-    rng = np.random.default_rng(seed)
-    rng, rng_outer, rng_setup = rng.spawn(3)
+    key = jr.key(seed)
+    key, key_outer, key_setup = jr.split(key, 3)
     torch.manual_seed(seed)
 
     k_samp = np.unique(
@@ -96,7 +106,7 @@ def main(cfg: DictConfig):
     # convert setup (kebab-case) to Camalcase and ensure PPD suffix
     try:
         Setup = getattr(data, utils.kebab_to_camel(setup_name))
-        setup = Setup(n, rng_setup, shuffle_data, x_design)
+        setup = Setup(key_setup, n, shuffle_data, x_design)
     except AttributeError:
         raise ValueError(f"Data {setup_name} not found in data module")
 
@@ -133,24 +143,25 @@ def main(cfg: DictConfig):
     # ------------------------------------------------------------
     # We run multiple outer paths (r_outer). For each path, we simulate
     # adding data points (up to n_horizon) and compute the delta/bias term.
-    # bias_per_path = []
+    bias_per_path = []
     for r in range(r_outer):
+        loopkey_outer = jr.fold_in(key_outer, r)
         tag = f"outer{r}"
         chk_path = savedir / f"{tag}.npy"
         if chk_path.exists():
-            logging.info(f"Resuming {tag} (found checkpoint).")
+            logging.info(f"Loading {tag} from checkpoint.")
             bias_per_path.append(np.load(chk_path))
         else:
             logging.info(f"Fresh run for {tag}.")
             start = timer()
             bias_val = run_single_outer_path(
-                rng_outer,
+                loopkey_outer,
+                clf,
                 X,
                 y,
                 k_samp,
                 m_inner=m_inner,
                 x_new=x_new,
-                clf=clf,
             )
 
             np.save(savedir / f"{tag}.npy", bias_val)

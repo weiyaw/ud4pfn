@@ -1,12 +1,12 @@
 # %%
-from tabpfn import TabPFNClassifier, TabPFNRegressor
+from pred_rule import TabPFNClassifierPPD, TabPFNRegressorPPD
 import warnings
 from typing import Callable
 import torch
 
 import numpy as np
 from scipy.stats import norm
-from numpy.random import Generator
+import jax.random as jr
 from tqdm import trange
 
 
@@ -148,147 +148,6 @@ def assert_ppd_args_shape(x_new, x_prev, y_prev):
     assert y_prev.ndim == 1, "y_prev must be 1D array"
 
 
-class TabPFNRegressorPPD(TabPFNRegressor):
-
-    def __init__(self, *args, y_star: float, **kwargs):
-        super().__init__(*args, **kwargs)
-        self.y_star = y_star
-
-    def sample(
-        self,
-        rng: Generator,
-        x_new: np.ndarray,
-        x_prev: np.ndarray,
-        y_prev: np.ndarray,
-        size: int = 1,
-    ) -> tuple[np.ndarray, dict]:
-        # Sample from predictive density
-        assert_ppd_args_shape(x_new, x_prev, y_prev)
-        self.fit(x_prev, y_prev)
-        with warnings.catch_warnings():
-            warnings.filterwarnings(
-                "ignore",
-                message="overflow encountered in cast",
-                category=RuntimeWarning,
-            )
-            pred_output = self.predict(x_new, output_type="full")
-        bardist = pred_output["criterion"]
-        logits = pred_output["logits"]
-        y_new = [self.bardist_sample(rng, bardist.icdf, logits) for _ in range(size)]
-        y_new = np.stack(y_new, axis=0)  # (n, num_x_new)
-
-        return y_new, {"bardist": bardist, "logits": logits.cpu().numpy()}
-
-    def bardist_sample(
-        self, rng: Generator, bardist_icdf: Callable, logits: torch.Tensor
-    ) -> np.ndarray:
-        """Samples values from the bar distribution. A modified version of
-        https://github.com/PriorLabs/TabPFN/blob/1b786570f5d5da3f3b9b6179c3fa43faf0c77894/src/tabpfn/architectures/base/bar_distribution.py#L581
-        Temperature t.
-        """
-        assert logits.ndim == 2, "logits must be 2D array (num_data, num_of_bins)"
-        p_cdf = rng.uniform(size=(logits.shape[0],))
-        return np.array(
-            [bardist_icdf(logits[i, :], p).cpu() for i, p in enumerate(p_cdf.tolist())]
-        )
-
-    def predict_event(
-        self,
-        x_new: np.ndarray,
-        x_prev: np.ndarray,
-        y_prev: np.ndarray,
-        # y_star: float = 3.0,
-    ) -> np.ndarray:
-        """
-        Return P(Y <= y_star | X = x_new, prev data).
-
-        Parameters
-        ----------
-        x_new : (m, d) array
-            Query covariates.
-        x_prev : (n, d) array
-            Historical covariates.
-        y_prev : (n,) array
-            Historical targets.
-        y_star : float, default=3.0
-            Event threshold.
-        """
-        assert_ppd_args_shape(x_new, x_prev, y_prev)
-        self.fit(x_prev, y_prev)
-        with warnings.catch_warnings():
-            warnings.filterwarnings(
-                "ignore",
-                message="overflow encountered in cast",
-                category=RuntimeWarning,
-            )
-            pred_output = self.predict(x_new, output_type="full")
-
-        logits = pred_output["logits"]
-        bardist = pred_output["criterion"]
-
-        # Evaluate the predictive CDF at y_star for each query point.
-        ys = torch.full(
-            (logits.shape[0], 1),
-            float(self.y_star),
-            dtype=torch.float32,
-        )
-
-        bardist.borders = bardist.borders.cpu()
-        cdf_vals = bardist.cdf(logits.cpu(), ys).squeeze(-1)
-        return cdf_vals.numpy()
-
-
-# %%
-
-
-class TabPFNClassifierPPD(TabPFNClassifier):
-
-    def __init__(self, *args, y_star: float, **kwargs):
-        super().__init__(*args, **kwargs)
-        self.y_star = y_star
-
-    def sample(
-        self,
-        rng: Generator,
-        x_new: np.ndarray,
-        x_prev: np.ndarray,
-        y_prev: np.ndarray,
-        size: int = 1,
-    ) -> tuple[np.ndarray, dict]:
-        assert_ppd_args_shape(x_new, x_prev, y_prev)
-        self.fit(x_prev, y_prev)
-        probs_new = self.predict_proba(x_new)
-
-        idx_new = [rng.choice(a=self.classes_.size, p=p, size=size) for p in probs_new]
-        y_new = np.stack(
-            [self.classes_[idx] for idx in idx_new], axis=1
-        )  # (n, num_x_new)
-
-        return y_new, {"probs": probs_new}
-
-    def predict_event(
-        self,
-        x_new: np.ndarray,
-        x_prev: np.ndarray,
-        y_prev: np.ndarray,
-    ) -> np.ndarray:
-        """Return P(Y = 1 | X = x_new, prev data)."""
-        assert_ppd_args_shape(x_new, x_prev, y_prev)
-        self.fit(x_prev, y_prev)
-        probs = self.predict_proba(x_new)
-
-        if self.y_star in self.classes_:
-            # Identify the column corresponding to the positive class label.
-            class_idx = np.where(self.classes_ == self.y_star)[0]
-            event_prob = probs[:, class_idx[0]].squeeze()
-        else:
-            # If y_star is not supported, return zero probability
-            event_prob = np.zeros(probs.shape[0], dtype=probs.dtype)
-        return event_prob
-
-
-# %%
-
 
 def compute_gn(clf, x_grid, x_prev, y_prev):
     # return gn
@@ -308,15 +167,17 @@ def compute_gn(clf, x_grid, x_prev, y_prev):
     return clf.predict_event(x_new=x_grid, x_prev=x_prev, y_prev=y_prev)
 
 
-def sample_gn_plus_1(rng, clf, x_grid, x_prev, y_prev, size=100):
+def sample_gn_plus_1(key, clf, x_grid, x_prev, y_prev, size=100):
     # draw g_{n+1}
     # return a 2d array of shape (mc_samples, m)
     assert_ppd_args_shape(x_grid, x_prev, y_prev)
-    x_plus_1 = x_prev[rng.choice(x_prev.shape[0], size=size, replace=True)]
+    key_choice, key_sample = jr.split(key)
+    idx = jr.choice(key_choice, x_prev.shape[0], shape=(size,), replace=True)
+    x_plus_1 = x_prev[idx]
     y_plus_1, _ = clf.sample(
-        rng=rng, x_new=x_plus_1, x_prev=x_prev, y_prev=y_prev, size=1
+        key=key_sample, x_new=x_plus_1, x_prev=x_prev, y_prev=y_prev, size=1
     )
-    y_plus_1 = y_plus_1.squeeze()
+    y_plus_1 = np.array(y_plus_1).squeeze()
 
     assert x_plus_1.shape[0] == y_plus_1.shape[0]
     assert x_plus_1.shape[0] == size
@@ -361,7 +222,7 @@ def compute_g0_to_gn(clf, x_grid, x_prev, y_prev):
     g0_to_gn[0, :] = np.nan
 
     for k in trange(1, n + 1):
-        if isinstance(clf, TabPFNClassifier):
+        if isinstance(clf, TabPFNClassifierPPD):
             y_prefix = y_prev[:k]
             if np.min(y_prefix) == np.max(y_prefix):
                 # if all labels are identical, set constant prediction
@@ -420,8 +281,9 @@ def build_pointwise_band(mean, cov, alpha: float = 0.05):
 def build_simultaneous_band(mean, cov, alpha: float = 0.05):
     se = np.sqrt(np.diag(cov))
     # multivariate CLT draws
-    rng = np.random.default_rng(501938)
-    draws = rng.multivariate_normal(mean, cov, size=1000)
+    key = jr.key(501938)
+    draws = jr.multivariate_normal(key, mean, cov, shape=(1000,))
+    draws = np.array(draws)
     # sup-norm calibration
     se_safe = se.copy()
     se_safe[se_safe == 0] = np.inf

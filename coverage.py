@@ -4,14 +4,12 @@ from loguru import logger
 import sys
 
 import numpy as np
-from numpy.random import Generator
+import jax.random as jr
 
 from scipy.stats import norm
 import torch
 from timeit import default_timer as timer
-from tabpfn import TabPFNRegressor
 import utils
-import forward
 import os
 
 
@@ -31,8 +29,8 @@ def build_simultaneous_band(mean, cov, alpha: float = 0.05):
     se = np.sqrt(np.diag(cov))
 
     # multivariate CLT draws
-    rng = np.random.default_rng(501938)
-    draws = rng.multivariate_normal(mean, cov, size=1000)
+    key = jr.key(501938)
+    draws = jr.multivariate_normal(key, mean, cov, shape=(1000,))
 
     # sup-norm calibration
     se_safe = se.copy()
@@ -85,7 +83,7 @@ for root, dirs, filenames in os.walk(savedir):
 
 
 # %%
-from forward import compute_vn
+from credible_set import compute_vn
 
 g0_to_gn = np.asarray(g0_to_gn)  # (rep, n, m)
 gn = np.asarray(gn)  # (rep, m)
@@ -418,7 +416,7 @@ for root, dirs, filenames in os.walk(savedir):
 
 
 ghat = np.asarray([utils.read_from(f) for f in files])  # (rep, n, m)
-rng = np.random.default_rng(100)
+key = jr.key(100)
 pbands = [clt_pointwise_band(g, alpha=0.05) for g in ghat]
 sbands = [clt_simultaneous_band(g, alpha=0.05, n_draws=1000, rng=rng) for g in ghat]
 
