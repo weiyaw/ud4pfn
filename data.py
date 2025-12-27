@@ -22,12 +22,12 @@ class Data:
         key: jr.key,
         n: int,
         shuffle: bool = False,
-        design: str = "one-gap",
+        x_design: str = "one-gap",
     ):
         self.key = key
-        self.x_design = design
+        self.x_design = x_design
         key_x, key_y, key_shuffle = jr.split(key, 3)
-        self.X = self.get_x(key_x, n, design)
+        self.X = self.get_x(key_x, n, x_design)
         # get y from subclass and compute true_curve separately via get_true_curve
         self.y = self.get_y(key_y, self.X)
 
@@ -36,25 +36,25 @@ class Data:
             self.X = self.X[perm]
             self.y = self.y[perm]
 
-    def get_x(self, key, n, design="one-gap") -> np.ndarray:
+    def get_x(self, key, n, x_design="one-gap") -> np.ndarray:
         # uniform between -10 and 10. no data in the gaps
-        if design == "one-gap":
+        if x_design == "one-gap":
             key1, key2 = jr.split(key)
             xs1 = jr.uniform(key1, shape=(n // 2,), minval=-8, maxval=-2)
             xs2 = jr.uniform(key2, shape=(n - n // 2,), minval=2, maxval=8)
             xs = jnp.concatenate([xs1, xs2])
-        elif design == "two-gap":
+        elif x_design == "two-gap":
             k1, k2, k3 = jr.split(key, 3)
             xs1 = jr.uniform(k1, shape=(n // 3,), minval=-10, maxval=-4)
             xs2 = jr.uniform(k2, shape=(n // 3,), minval=0, maxval=2)
             xs3 = jr.uniform(k3, shape=(n - 2 * (n // 3)), minval=6, maxval=10)
             xs = jnp.concatenate([xs1, xs2, xs3])
-        elif design == "uniform-1d":
+        elif x_design == "uniform-1d":
             xs = jr.uniform(key, shape=(n,), minval=-10, maxval=10)
-        elif design == "uniform-2d":
+        elif x_design == "uniform-2d":
             xs = jr.uniform(key, shape=(n, 2), minval=-10, maxval=10)
         else:
-            raise ValueError(f"Unknown design='{design}'")
+            raise ValueError(f"Unknown design='{x_design}'")
         if xs.ndim == 1:
             xs = xs[:, None]
         return np.array(xs)
@@ -85,12 +85,32 @@ class Data:
         plt.grid()
         plt.show()
 
+    def visualise_true_event(self):
+        import matplotlib.pyplot as plt
+        import utils
+        from constants import Y_STAR_MAP
+
+        assert self.X.ndim == 2 and self.X.shape[1] == 1
+
+        setup_name = utils.camel_to_kebab(self.__class__.__name__)
+        y_star = Y_STAR_MAP[setup_name]
+        plt.figure(figsize=(8, 5))
+        x = self.X[:, 0]
+        x_grid = np.linspace(x.min(), x.max(), 200, dtype=np.float32)[:, None]
+        plt.plot(x_grid, self.get_true_event(x_grid, y_star), label="true event")
+        plt.title(f"{setup_name} ({self.x_design} design)")
+        plt.xlabel("X")
+        plt.ylabel(f"P(Y <= {y_star} | X)")
+        plt.ylim(-0.01, 1.01)
+        plt.legend()
+        plt.grid()
+        plt.show()
 
 class GaussianLinear(Data):
 
     def _param(self, x):
-        a = 2.0
-        b = 1.0
+        a = 0.2
+        b = 0.0
         mean = (a * x + b).astype(np.float32)
         noise_std = 1.0
         return mean, noise_std
@@ -112,8 +132,8 @@ class GaussianLinear(Data):
 class GaussianPolynomial(Data):
 
     def _param(self, x):
-        # Polynomial passing through (-10, -2), (0, 2), (10, -2)
-        mean = (2.0 - 0.04 * x**2).astype(np.float32)
+        # Polynomial passing through (-10, -2), (0, 1), (10, -2)
+        mean = (1.0 - 0.03 * x**2).astype(np.float32)
         noise_std = 1.0
         return mean, noise_std
 
@@ -134,11 +154,11 @@ class GaussianPolynomial(Data):
 class GaussianLinearDependentError(Data):
 
     def _params(self, x: np.ndarray):
-        a = 2.0
+        a = 0.5
         b = 1.0
         mean = (a * x + b).astype(np.float32)
         # Higher |x| -> larger noise variance
-        noise_std = 0.1 + 0.5 * np.abs(x)
+        noise_std = 0.5 + 0.5 * np.abs(x)
         return mean, noise_std
 
     def get_y(self, key, x):
@@ -190,7 +210,7 @@ class GaussianSine(Data):
         a = 0.5
         b = 0.0
         mean = a * np.sin(x / 2) + b
-        noise_std = 0.1
+        noise_std = 0.5
         return mean, noise_std
 
     def get_y(self, key, x):
@@ -212,10 +232,10 @@ class PoissonLinear(Data):
     # good y_star = 1
 
     def _params(self, x: np.ndarray) -> np.ndarray:
-        # parabola: y = a(x+10)(x-10) = a(x^2 - 100)
+        # parabola: y = a(x^2 - 80) + 5
         # choose a > 0 for positive opening, scaled appropriately
         a = 0.05
-        rate = a * (x**2 - 100.0) + 5.0  # shift up to keep positive
+        rate = a * (x**2 - 80.0) + 5.0  # shift up to keep positive
         return rate.astype(np.float32)
 
     def get_y(self, key, x):
@@ -237,7 +257,7 @@ class ProbitMixture(Data):
     # good y_star = 1
 
     def _params(self, x: np.ndarray) -> np.ndarray:
-        p = 0.6 * norm.cdf((x - 3.0) / 1.0) + 0.4 * norm.cdf((x + 3.0) / 1.0)
+        p = 0.6 * norm.cdf((x - 8.0) / 4.0) + 0.4 * norm.cdf((x + 8.0) / 4.0)
         return p.astype(np.float32)
 
     def get_y(self, key, x):
@@ -269,7 +289,7 @@ class CategoricalLinear(Data):
         # Class 0: mostly in [-10, 0] -> center -5
         logits[:, 0] = -1.0 * (x + 5.0) ** 2 / 10.0
         # Class 1: mostly in [-5, 5] -> center 0
-        logits[:, 1] = -1.0 * (x) ** 2 / 10.0
+        logits[:, 1] = -1.0 * (x) ** 2 / 30.0
         # Class 2: mostly in [4, 10] -> center 7
         logits[:, 2] = -1.0 * (x - 7.0) ** 2 / 5.0
         # Class 3: mostly in [0, 8] -> center 4
@@ -312,7 +332,7 @@ class Gamma(Data):
     def get_true_event(self, x: np.ndarray, y_star: int) -> np.ndarray:
         # return the P(y <= y_star | x) of Gamma(shape=2, scale=2)
         cdf = gamma.cdf(y_star, a=2, scale=2)
-        return cdf.astype(np.float32)
+        return np.full(x.shape[0], cdf, dtype=np.float32)
 
 
 class LogisticLinear(Data):
@@ -321,7 +341,7 @@ class LogisticLinear(Data):
     def _params(self, x: np.ndarray) -> np.ndarray:
         # P(Y=1|X) = sigmoid(a*x + b)
         a = 0.2
-        b = 0.0
+        b = -0.4
         logits = a * x + b
         p = 1.0 / (1.0 + np.exp(-logits))
         return p.astype(np.float32)

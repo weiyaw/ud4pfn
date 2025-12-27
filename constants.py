@@ -18,5 +18,6 @@ Y_STAR_MAP = {
     **{k: 0.0 for k in REGRESSION},
     **{k: 1 for k in CLASSIFICATION},
     "gamma-linear": 4.0,
+    "gamma": 2.5,
     "poisson-linear": 1,
 }
