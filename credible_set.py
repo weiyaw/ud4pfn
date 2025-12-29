@@ -7,12 +7,12 @@ import torch
 import jax
 import jax.numpy as jnp
 import jax.random as jr
-
+from jax.scipy.stats import norm
+from scipy.stats import chi2
+from scipy.special import gammaln
 
 import numpy as np
-from scipy.stats import norm
 from tqdm import trange
-
 
 
 def assert_ppd_args_shape(x_new, x_prev, y_prev):
@@ -26,7 +26,6 @@ def assert_ppd_args_shape(x_new, x_prev, y_prev):
         x_prev.shape[1] == x_new.shape[1]
     ), "x_prev and x_new must have same number of features"
     assert y_prev.ndim == 1, "y_prev must be 1D array"
-
 
 
 def compute_gn(clf, x_grid, x_prev, y_prev):
@@ -148,6 +147,26 @@ def compute_vn(g0_to_gn, type="simultaneous"):
         return np.mean(k[:, None, None] ** 2 * outer, axis=0)  # (m, m)
 
 
+def compute_pointwise_coverage(true_curve, bands):
+    # check if each point in the grid is covered, then average over grid points
+    intervals = [(b["lower"], b["upper"]) for b in bands]
+    if any(np.any(np.isnan(l)) or np.any(np.isnan(u)) for l, u in intervals):
+        return np.nan
+
+    is_covered = [(true_curve >= l) & (true_curve <= u) for (l, u) in intervals]
+    return np.mean(np.asarray(is_covered))
+
+
+def compute_simultaneous_coverage(true_curve, bands):
+    # coverage of the entire curve
+    intervals = [(b["lower"], b["upper"]) for b in bands]
+    if any(np.any(np.isnan(l)) or np.any(np.isnan(u)) for l, u in intervals):
+        return np.nan
+
+    is_covered = [np.all((true_curve >= l) & (true_curve <= u)) for (l, u) in intervals]
+    return np.mean(is_covered)
+
+
 def build_pointwise_band(mean, cov, alpha: float = 0.05):
     se = np.sqrt(cov)
     z = norm.ppf(1 - alpha / 2)
@@ -155,25 +174,27 @@ def build_pointwise_band(mean, cov, alpha: float = 0.05):
     # upper = np.clip(mean + z * se, 0.0, 1.0)
     lower = mean - z * se
     upper = mean + z * se
-    return {"mean": mean, "lower": lower, "upper": upper, "se": se}
+    width = 2 * z * se
+    return {"mean": mean, "lower": lower, "upper": upper, "se": se, "width": width}
 
 
 def build_simultaneous_band(mean, cov, alpha: float = 0.05):
+    # See Algorithm 1 of https://doi.org/10.1002/jae.2656
     se = np.sqrt(np.diag(cov))
-    # multivariate CLT draws
+
     key = jr.key(501938)
-    draws = jr.multivariate_normal(key, mean, cov, shape=(1000,))
-    draws = np.array(draws)
-    # sup-norm calibration
-    se_safe = se.copy()
-    se_safe[se_safe == 0] = np.inf
-    Z = (draws - mean[None, :]) / se_safe[None, :]
-    T = np.max(np.abs(Z), axis=1)
-    c_alpha = float(np.quantile(T, 1 - alpha))
-    # lower = np.clip(mean - c_alpha * se, 0.0, 1.0)
-    # upper = np.clip(mean + c_alpha * se, 0.0, 1.0)
+    draws = jr.multivariate_normal(key, jnp.zeros_like(mean), cov, shape=(1000,))
+
+    # Handle division by zero safely in JAX
+    se_safe = jnp.where(se == 0, jnp.inf, se)
+
+    Z = draws / se_safe[None, :]
+    T = jnp.max(jnp.abs(Z), axis=1)
+    c_alpha = jnp.quantile(T, 1 - alpha)
     lower = mean - c_alpha * se
     upper = mean + c_alpha * se
+    width = jnp.mean(2 * c_alpha * se)
+
     return {
         "mean": mean,
         "lower": lower,
@@ -181,6 +202,45 @@ def build_simultaneous_band(mean, cov, alpha: float = 0.05):
         "c_alpha": c_alpha,
         "se": se,
         "draws": draws,
+        "width": width,
+    }
+
+
+def compute_ellipsoid_log_volume(cov, radius):
+    # compute log of the volume of a high-dimensional ellipsoid defined by radius^2 > x^T cov^{-1} x
+    d = cov.shape[0]
+    log_unit_ball = (d / 2) * np.log(np.pi) - gammaln(d / 2 + 1)
+
+    sign, logdet = np.linalg.slogdet(cov)
+    if sign <= 0:
+        return -np.inf  # Or raise error: Covariance must be positive definite
+    return log_unit_ball + 0.5 * logdet + d * np.log(radius)
+
+
+def build_ellipsoid_band(mean, cov, alpha: float = 0.05):
+    # given a multivariate normal defined by mean and cov, compute the ellipsoid
+    # such that the volume of the ellipsoid is 1-alpha
+
+    d = mean.shape[0]
+    # The squared radius corresponding to probability mass 1-alpha
+    # is the quantile of the chi-squared distribution with d degrees of freedom.
+    radius_sq = chi2.ppf(1 - alpha, df=d)
+    radius = np.sqrt(radius_sq)
+
+    log_vol = compute_ellipsoid_log_volume(cov, radius)
+
+    # This is the projection of the ellipsoid to the coordinate axes
+    se = np.sqrt(np.diag(cov))
+    delta = se * radius
+    lower = mean - delta
+    upper = mean + delta
+
+    return {
+        "mean": mean,
+        "lower": lower,
+        "upper": upper,
+        "radius": radius,
+        "log_volume": log_vol,
     }
 
 

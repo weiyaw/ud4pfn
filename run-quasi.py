@@ -78,7 +78,7 @@ def main(cfg: DictConfig):
     n_estimators = int(cfg.n_estimators)
     n = int(cfg.n0)
     n_horizon = int(cfg.n_horizon)
-    r_outer = int(cfg.r_outer)
+    outer_idx = int(cfg.outer_idx)
     m_inner = int(cfg.m_inner)
     seed = int(cfg.seed)
     setup_name = cfg.setup
@@ -131,10 +131,10 @@ def main(cfg: DictConfig):
         raise ValueError(f"Unknown setup {setup_name}")
 
     # ------------------------------------------------------------
-    # 3.  Run Outer Paths (Quasi-Martingale Check)
+    # 3.  Run A Single Outer Path (Quasi-Martingale Check)
     # ------------------------------------------------------------
-    # We run multiple outer paths (r_outer). For each path, we simulate
-    # adding data points (up to n_horizon) and compute the delta/bias term.
+    # Run one outer path (indexed by outer_idx). We simulate adding data points (up to n_horizon)
+    # and compute the delta/bias term.
 
     k_samp = np.unique(
         np.logspace(np.log10(1), np.log10(n_horizon), 10).astype(int)
@@ -144,32 +144,27 @@ def main(cfg: DictConfig):
 
 
     bias_per_path = []
-    for r in range(r_outer):
-        loopkey_outer = jr.fold_in(key_outer, r)
-        tag = f"outer{r}"
-        chk_path = savedir / f"{tag}.npy"
-        if chk_path.exists():
-            logging.info(f"Loading {tag} from checkpoint.")
-            bias_per_path.append(np.load(chk_path))
-        else:
-            logging.info(f"Fresh run for {tag}.")
-            start = timer()
-            bias_val = run_single_outer_path(
-                loopkey_outer,
-                clf,
-                X,
-                y,
-                k_samp,
-                m_inner=m_inner,
-                x_new=x_new,
-            )
+    loopkey_outer = jr.fold_in(key_outer, outer_idx)
+    tag = f"outer{outer_idx}"
+    chk_path = savedir / f"{tag}.npy"
+    if chk_path.exists():
+        logging.info(f"Loading {tag} from checkpoint.")
+        bias_per_path.append(np.load(chk_path))
+    else:
+        logging.info(f"Fresh run for {tag}.")
+        start = timer()
+        bias_val = run_single_outer_path(
+            loopkey_outer,
+            clf,
+            X,
+            y,
+            k_samp,
+            m_inner=m_inner,
+            x_new=x_new,
+        )
 
-            np.save(savedir / f"{tag}.npy", bias_val)
-            logging.info(f"Built {tag} in {timer() - start:.2f} seconds")
-
-    # bias_per_path = np.vstack(bias_per_path)  # (r_outer, len(k_samp))
-    # bias_mean = bias_per_path.mean(axis=0)
-    # partial       = np.cumsum(np.sqrt(n + k_samp + 1) * np.abs(bias_mean)) # This line was incomplete in original file
+        np.save(savedir / f"{tag}.npy", bias_val)
+        logging.info(f"Built {tag} in {timer() - start:.2f} seconds")
 
 
 if __name__ == "__main__":
