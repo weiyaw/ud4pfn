@@ -92,14 +92,6 @@ def main(cfg: DictConfig):
     key, key_outer, key_setup = jr.split(key, 3)
     torch.manual_seed(seed)
 
-    k_samp = np.unique(
-        np.concatenate(
-            [np.arange(1, 21), np.arange(25, 101, 5), np.arange(120, n_horizon + 1, 20)]
-        )
-    ).astype(int)
-
-    logging.info(f"k_samp shape: {k_samp.shape}")
-
     # ------------------------------------------------------------
     # 1. Load Data and Setup
     # ------------------------------------------------------------
@@ -143,6 +135,14 @@ def main(cfg: DictConfig):
     # ------------------------------------------------------------
     # We run multiple outer paths (r_outer). For each path, we simulate
     # adding data points (up to n_horizon) and compute the delta/bias term.
+
+    k_samp = np.unique(
+        np.logspace(np.log10(1), np.log10(n_horizon), 10).astype(int)
+    )
+    np.save(savedir / "k_samp.npy", k_samp)
+    logging.info(f"k_samp shape: {k_samp.shape}")
+
+
     bias_per_path = []
     for r in range(r_outer):
         loopkey_outer = jr.fold_in(key_outer, r)

@@ -52,3 +52,23 @@ def kebab_to_camel(s: str) -> str:
     parts = [p for p in s.replace("_", "-").split("-") if p]
     return "".join(p.capitalize() for p in parts)
 
+
+def get_matching_dirs(directory: str, regex: str) -> list[str]:
+    """
+    Find subdirectories in a given directory that match a regex pattern.
+
+    Args:
+        directory (str): The directory to search in.
+        regex (str): The regular expression pattern to search for in directory names.
+
+    Returns:
+        list[str]: A sorted list of full paths to the matching directories.
+    """
+    matching_dirs = []
+    if os.path.exists(directory):
+        for entry in os.scandir(directory):
+            if entry.is_dir() and re.search(regex, entry.name):
+                matching_dirs.append(entry.path)
+    matching_dirs.sort()
+    return matching_dirs
+

@@ -86,6 +86,12 @@ class TabPFNRegressorPPD(TabPFNRegressor):
             Historical targets.
         y_star : float, default=3.0
             Event threshold.
+
+        Return:
+        -------
+        np.ndarray
+            P(Y <= y_star | X = x_new, prev data).
+            Shape: (m,)
         """
         assert_ppd_args_shape(x_new, x_prev, y_prev)
         self.fit(x_prev, y_prev)
@@ -97,7 +103,7 @@ class TabPFNRegressorPPD(TabPFNRegressor):
             )
             pred_output = self.predict(x_new, output_type="full")
 
-        logits = pred_output["logits"]
+        logits = pred_output["logits"] # shape: (m, num_of_bins)
         bardist = pred_output["criterion"]
 
         # Evaluate the predictive CDF at y_star for each query point.
@@ -129,9 +135,31 @@ class TabPFNClassifierPPD(TabPFNClassifier):
         y_prev: np.ndarray,
         size: int = 1,
     ) -> tuple[np.ndarray, dict]:
+        """
+        Sample from predictive density.
+
+        Parameters
+        ----------
+        key : jr.key
+            Random key.
+        x_new : (m, d) array
+            Query covariates.
+        x_prev : (n, d) array
+            Historical covariates.
+        y_prev : (n,) array
+            Historical targets.
+        size : int, default=1
+            Number of samples.
+
+        Return:
+        -------
+        tuple[np.ndarray, dict]
+            Sampled values and additional information.
+            Shape: (size, m)
+        """
         assert_ppd_args_shape(x_new, x_prev, y_prev)
         self.fit(x_prev, y_prev)
-        probs_new = self.predict_proba(x_new)
+        probs_new = self.predict_proba(x_new) # shape: (m, num_classes)
 
         # Draw index for each x_new across size samples
         # JAX version of random choice for each probabilities row
@@ -150,10 +178,26 @@ class TabPFNClassifierPPD(TabPFNClassifier):
         x_prev: np.ndarray,
         y_prev: np.ndarray,
     ) -> np.ndarray:
-        """Return P(Y = 1 | X = x_new, prev data)."""
+        """Return P(Y = 1 | X = x_new, prev data).
+
+        Parameters
+        ----------
+        x_new : (m, d) array
+            Query covariates.
+        x_prev : (n, d) array
+            Historical covariates.
+        y_prev : (n,) array
+            Historical targets.
+        
+        Return:
+        -------
+        np.ndarray
+            P(Y = y_star | X = x_new, prev data).
+            Shape: (m,)
+        """
         assert_ppd_args_shape(x_new, x_prev, y_prev)
         self.fit(x_prev, y_prev)
-        probs = self.predict_proba(x_new)
+        probs = self.predict_proba(x_new) # shape: (m, num_classes)
 
         if self.y_star in self.classes_:
             # Identify the column corresponding to the positive class label.

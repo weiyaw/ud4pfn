@@ -9,13 +9,15 @@ from dataclasses import dataclass
 from typing import Union
 
 
-
 @dataclass
 class Data:
     key: jr.key
     X: np.ndarray
     y: np.ndarray
     x_design: str
+
+    def __repr__(self) -> str:
+        return f"{self.__class__.__name__}(key, X=np.ndarray{self.X.shape}, y=np.ndarray{self.y.shape}, x_design='{self.x_design}')"
 
     def __init__(
         self,
@@ -105,6 +107,7 @@ class Data:
         plt.legend()
         plt.grid()
         plt.show()
+
 
 class GaussianLinear(Data):
 
