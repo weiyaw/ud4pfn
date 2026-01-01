@@ -158,7 +158,7 @@ class GaussianLinearSusan(Data):
         cdf = norm.cdf(t, loc=mean, scale=noise_std)
         return cdf.astype(np.float32)
 
-    def get_x(self, key, n):
+    def get_x(self, key, n, x_design):
         return jr.uniform(key, shape=(n, 2), minval=0, maxval=1)
 
 
