@@ -121,6 +121,9 @@ def main(cfg: DictConfig):
     # Query covariate: 0.0 for 1D/2D (center of domain)
     x_new = np.zeros((1, x_prev.shape[1]), dtype=np.float32)
     t = np.array([Y_STAR_MAP[setup_name]])
+    if setup_name == "gaussian-linear-susan":
+        x_new = np.array([0.5, 0.5])
+        t = np.array([2.5])
 
     savedir = Path(hydra.core.hydra_config.HydraConfig.get().runtime.output_dir)
     logging.info(f"Experiment directory: {savedir}")
@@ -132,11 +135,13 @@ def main(cfg: DictConfig):
     if setup_name in REGRESSION:
         clf = TabPFNRegressorPPD(
             n_estimators=n_estimators,
+            softmax_temperature=1.0,
             model_path="tabpfn-model/tabpfn-v2-regressor.ckpt",
         )
     elif setup_name in CLASSIFICATION:
         clf = TabPFNClassifierPPD(
             n_estimators=n_estimators,
+            softmax_temperature=1.0,
             model_path="tabpfn-model/tabpfn-v2-classifier.ckpt",
         )
     else:

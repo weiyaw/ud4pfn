@@ -134,6 +134,34 @@ class GaussianLinear(Data):
         return cdf.astype(np.float32)
 
 
+class GaussianLinearSusan(Data):
+
+    def _param(self, x: np.ndarray):
+
+        assert x.ndim == 2
+        assert x.ndim == 2 and x.shape[1] == 2
+        alpha = 1.0
+        beta = np.array([1.5, -0.8])
+        mean = (alpha + beta @ x.T).astype(np.float32)
+        noise_std = 0.7
+        return mean, noise_std
+
+    def get_y(self, key, x):
+        # linear function plus constant Gaussian noise
+        mean, noise_std = self._param(x)
+        y = mean + jr.normal(key, shape=mean.shape) * noise_std
+        return np.array(y).astype(np.float32)
+
+    def get_true_event(self, x: np.ndarray, t: float) -> np.ndarray:
+        # return the P(Y <= t | x) of Gaussian at mean=true_curve(x), sd=0.5
+        mean, noise_std = self._param(x)
+        cdf = norm.cdf(t, loc=mean, scale=noise_std)
+        return cdf.astype(np.float32)
+
+    def get_x(self, key, n):
+        return jr.uniform(key, shape=(n, 2), minval=0, maxval=1)
+
+
 class GaussianPolynomial(Data):
 
     def _param(self, x):
