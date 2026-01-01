@@ -70,13 +70,13 @@ class Data:
         """Return the true probability of event evaluated at x (1-D array)."""
         pass
 
-    def visualise(self):
+    def visualise(self, figsize=(8, 5)):
         # visualise data and true curve
         import matplotlib.pyplot as plt
 
         assert self.X.ndim == 2 and self.X.shape[1] == 1
 
-        plt.figure(figsize=(8, 5))
+        plt.figure(figsize=figsize)
         x = self.X[:, 0]
         plt.scatter(x, self.y, alpha=0.5, label="data")
         x_grid = np.linspace(x.min(), x.max(), 200, dtype=np.float32)[:, None]
@@ -112,13 +112,12 @@ class Data:
 class GaussianLinear(Data):
 
     def _param(self, x: np.ndarray):
-
-        assert x.ndim == 2
         assert x.ndim == 2 and x.shape[1] == 1
         a = 0.2
         b = 0.0
-        mean = (a * x.ravel() + b).astype(np.float32)
+        mean = (a * x + b).squeeze(-1)
         noise_std = 1.0
+        assert mean.shape == (x.shape[0],)
         return mean, noise_std
 
     def get_y(self, key, x):
@@ -137,13 +136,12 @@ class GaussianLinear(Data):
 class GaussianLinearSusan(Data):
 
     def _param(self, x: np.ndarray):
-
-        assert x.ndim == 2
         assert x.ndim == 2 and x.shape[1] == 2
         alpha = 1.0
         beta = np.array([1.5, -0.8])
-        mean = (alpha + beta @ x.T).astype(np.float32)
+        mean = alpha + beta @ x.T
         noise_std = 0.7
+        assert mean.shape == (x.shape[0],)
         return mean, noise_std
 
     def get_y(self, key, x):
@@ -166,15 +164,16 @@ class GaussianPolynomial(Data):
 
     def _param(self, x):
         # Polynomial passing through (-10, -2), (0, 1), (10, -2)
-        mean = (1.0 - 0.03 * x**2).astype(np.float32)
+        assert x.ndim == 2 and x.shape[1] == 1
+        mean = (1.0 - 0.03 * x**2).squeeze(-1)
         noise_std = 1.0
+        assert mean.shape == (x.shape[0],)
         return mean, noise_std
 
     def get_y(self, key, x):
         # linear function plus constant Gaussian noise
-        assert x.ndim == 2 and x.shape[1] == 1
-        mean, noise_std = self._param(x.ravel())
-        y = mean + jr.normal(key, shape=x.ravel().shape) * noise_std
+        mean, noise_std = self._param(x)
+        y = mean + jr.normal(key, shape=x.shape) * noise_std
         return np.array(y).astype(np.float32)
 
     def get_true_event(self, x: np.ndarray, t: float) -> np.ndarray:

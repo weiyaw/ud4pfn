@@ -62,19 +62,18 @@ def run_single_outer_path(key, clf, t, x_new, x_prev, y_prev, k_samp, m_inner):
     delta_vals = []
     prev_k = 0
 
-    for k in tqdm(k_samp, desc="outer", position=0):
-        key_outer = jr.fold_in(key, k)
-        key_outer, key_growth = jr.split(key_outer)
+    key_path, key_eval = jr.split(key)
 
+    for k in tqdm(k_samp, desc="outer", position=0):
         # rollout to length k by repeatedly appending (x_new, y_new)
         for j in range(prev_k, k):
-            subkey = jr.fold_in(key_growth, j)
+            subkey = jr.fold_in(key_path, j)
             y_new, _ = clf.sample(subkey, x_new, x_prev, y_prev)
             x_prev = np.vstack([x_prev, x_new])
             y_prev = np.append(y_prev, y_new)
 
         # conditional delta for event
-        key_outer, subkey = jr.split(key_outer)
+        subkey = jr.fold_in(key_eval, k)
         delta_k = inner_mc_delta(subkey, clf, t, x_new, x_prev, y_prev, m_inner)
         delta_vals.append(delta_k)
         prev_k = k
@@ -135,13 +134,13 @@ def main(cfg: DictConfig):
         clf = TabPFNRegressorPPD(
             n_estimators=n_estimators,
             softmax_temperature=1.0,
-            model_path="tabpfn-model/tabpfn-v2-regressor.ckpt",
+            model_path="tabpfn-model/tabpfn-v2.5-regressor-v2.5_default.ckpt",
         )
     elif setup_name in CLASSIFICATION:
         clf = TabPFNClassifierPPD(
             n_estimators=n_estimators,
             softmax_temperature=1.0,
-            model_path="tabpfn-model/tabpfn-v2-classifier.ckpt",
+            model_path="tabpfn-model/tabpfn-v2.5-classifier-v2.5_default.ckpt",
         )
     else:
         raise ValueError(f"Unknown setup {setup_name}")
