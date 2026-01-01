@@ -24,10 +24,6 @@ def assert_ppd_args_shape(x_new, x_prev, y_prev):
 
 class TabPFNRegressorPPD(TabPFNRegressor):
 
-    def __init__(self, *args, y_star: float, **kwargs):
-        super().__init__(*args, **kwargs)
-        self.y_star = y_star
-
     def sample(
         self,
         key: jr.key,
@@ -48,7 +44,10 @@ class TabPFNRegressorPPD(TabPFNRegressor):
             pred_output = self.predict(x_new, output_type="full")
         bardist = pred_output["criterion"]
         logits = pred_output["logits"]
-        y_new = [self.bardist_sample(jr.fold_in(key, i), bardist.icdf, logits) for i in range(size)]
+        y_new = [
+            self.bardist_sample(jr.fold_in(key, i), bardist.icdf, logits)
+            for i in range(size)
+        ]
         y_new = np.stack(y_new, axis=0)  # (n, num_x_new)
 
         return y_new, {"bardist": bardist, "logits": logits.cpu().numpy()}
@@ -68,30 +67,30 @@ class TabPFNRegressorPPD(TabPFNRegressor):
 
     def predict_event(
         self,
+        t: np.ndarray,
         x_new: np.ndarray,
         x_prev: np.ndarray,
         y_prev: np.ndarray,
-        # y_star: float = 3.0,
     ) -> np.ndarray:
         """
-        Return P(Y <= y_star | X = x_new, prev data).
+        Return P(Y <= t | X = x_new, prev data).
 
         Parameters
         ----------
+        t : (p, ) array
+            Events of the PPD.
         x_new : (m, d) array
             Query covariates.
         x_prev : (n, d) array
             Historical covariates.
         y_prev : (n,) array
             Historical targets.
-        y_star : float, default=3.0
-            Event threshold.
 
         Return:
         -------
         np.ndarray
-            P(Y <= y_star | X = x_new, prev data).
-            Shape: (m,)
+            P(Y <= t | X = x_new, prev data). Each row corresponds to a value of t, and each column corresponds to a value of x_new.
+            Shape: (p, m)
         """
         assert_ppd_args_shape(x_new, x_prev, y_prev)
         self.fit(x_prev, y_prev)
@@ -103,29 +102,34 @@ class TabPFNRegressorPPD(TabPFNRegressor):
             )
             pred_output = self.predict(x_new, output_type="full")
 
-        logits = pred_output["logits"] # shape: (m, num_of_bins)
+        logits = pred_output["logits"]  # shape: (m, num_of_bins)
         bardist = pred_output["criterion"]
 
-        # Evaluate the predictive CDF at y_star for each query point.
-        ys = torch.full(
-            (logits.shape[0], 1),
-            float(self.y_star),
-            dtype=torch.float32,
-        )
+        # t must be a 1D float array
+        t = np.atleast_1d(t)
+        assert t.ndim == 1 and t.dtype == float
 
         bardist.borders = bardist.borders.cpu()
-        cdf_vals = bardist.cdf(logits.cpu(), ys).squeeze(-1)
-        return cdf_vals.numpy()
+        results = []
+        for single_t in t:
+            # Evaluate the predictive CDF at a single t for each x_new query point.
+            ys = torch.full(
+                (logits.shape[0], 1),
+                float(single_t),
+                dtype=torch.float32,
+            )
+            # cdf returns (m, 1) or (m,), squeeze to ensure (m,)
+            cdf_val = bardist.cdf(logits.cpu(), ys).squeeze(-1)
+            results.append(cdf_val.numpy())
+
+        # Stack to get (p, m)
+        return np.stack(results)
 
 
 # %%
 
 
 class TabPFNClassifierPPD(TabPFNClassifier):
-
-    def __init__(self, *args, y_star: float, **kwargs):
-        super().__init__(*args, **kwargs)
-        self.y_star = y_star
 
     def sample(
         self,
@@ -159,54 +163,77 @@ class TabPFNClassifierPPD(TabPFNClassifier):
         """
         assert_ppd_args_shape(x_new, x_prev, y_prev)
         self.fit(x_prev, y_prev)
-        probs_new = self.predict_proba(x_new) # shape: (m, num_classes)
+        probs_new = self.predict_proba(x_new)  # shape: (m, num_classes)
 
         # Draw index for each x_new across size samples
         # JAX version of random choice for each probabilities row
         def sample_classes(subkey, p):
-              idx = jr.choice(subkey, a=self.classes_.size, shape=(size,), p=p)
-              return jnp.array(self.classes_)[idx]
+            idx = jr.choice(subkey, a=self.classes_.size, shape=(size,), p=p)
+            return jnp.array(self.classes_)[idx]
 
         keys = jr.split(key, probs_new.shape[0])
-        y_new = jax.vmap(sample_classes)(keys, probs_new).T # (n, num_x_new)
+        y_new = jax.vmap(sample_classes)(keys, probs_new).T  # (n, num_x_new)
 
         return y_new, {"probs": probs_new}
 
     def predict_event(
         self,
+        t: np.ndarray,
         x_new: np.ndarray,
         x_prev: np.ndarray,
         y_prev: np.ndarray,
     ) -> np.ndarray:
-        """Return P(Y = 1 | X = x_new, prev data).
+        """Return P(Y = t | X = x_new, prev data).
 
         Parameters
         ----------
+        t: (p, ) array
+            Event of the PPD.
         x_new : (m, d) array
             Query covariates.
         x_prev : (n, d) array
             Historical covariates.
         y_prev : (n,) array
             Historical targets.
-        
+
         Return:
         -------
         np.ndarray
-            P(Y = y_star | X = x_new, prev data).
-            Shape: (m,)
+            P(Y = t | X = x_new, prev data). Each row corresponds to a value of t, and each column corresponds to a value of x_new.
+            Shape: (p, m)
         """
         assert_ppd_args_shape(x_new, x_prev, y_prev)
         self.fit(x_prev, y_prev)
-        probs = self.predict_proba(x_new) # shape: (m, num_classes)
+        probs = self.predict_proba(x_new)  # shape: (m, num_classes)
 
-        if self.y_star in self.classes_:
-            # Identify the column corresponding to the positive class label.
-            class_idx = np.where(self.classes_ == self.y_star)[0]
-            event_prob = probs[:, class_idx[0]].squeeze()
-        else:
-            # If y_star is not supported, return zero probability
-            event_prob = np.zeros(probs.shape[0], dtype=probs.dtype)
-        return event_prob
+        # t must be a 1D integer array
+        t = np.atleast_1d(t)
+        assert t.ndim == 1 and t.dtype == int
 
+        def predict_event_single_t(single_t: int) -> jax.Array:
+            # Create a mask for the class: (num_classes,)
+            matches = self.classes_ == single_t
+            # Dot product selects the column or results in 0 if no match
+            # probs: (m, num_classes), matches: (num_classes,) -> (m,)
+            return jnp.dot(probs, matches)
+
+        event_prob = jax.vmap(predict_event_single_t)(t)
+        return np.array(event_prob)
+
+
+class BayesianBootstrapPPD:
+    def __init__(self):
+        self.x = None
+        self.y = None
+
+    def fit(self, x: np.ndarray, y: np.ndarray):
+        self.x = x
+        self.y = y
+
+    def sample(self, key: jr.key, x_new: np.ndarray, size: int = 1) -> np.ndarray:
+        pass
+
+    def predict_event(self, t: np.ndarray, x_new: np.ndarray) -> np.ndarray:
+        pass
 
 # %%

@@ -22,6 +22,7 @@ from constants import REGRESSION, CLASSIFICATION, Y_STAR_MAP
 
 os.environ["TABPFN_DISABLE_TELEMETRY"] = "1"
 
+
 @hydra.main(version_base=None, config_path="conf", config_name="ghat")
 def main(cfg: DictConfig):
     OmegaConf.resolve(cfg)
@@ -37,7 +38,6 @@ def main(cfg: DictConfig):
     seed = int(cfg.seed)
     tabpfn_n_estimators = int(cfg.n_estimators)
     tabpfn_average_before_softmax = cfg.average_before_softmax
-    x_grid = np.linspace(-10, 10, m).reshape(-1, 1)
 
     torch.manual_seed(8655 + seed)
     key = jr.key(1907 + seed)
@@ -56,7 +56,6 @@ def main(cfg: DictConfig):
 
     if setup_name in REGRESSION:
         clf = TabPFNRegressorPPD(
-            y_star=Y_STAR_MAP[setup_name],
             n_estimators=tabpfn_n_estimators,
             average_before_softmax=tabpfn_average_before_softmax,
             softmax_temperature=1.0,
@@ -65,7 +64,6 @@ def main(cfg: DictConfig):
         )
     elif setup_name in CLASSIFICATION:
         clf = TabPFNClassifierPPD(
-            y_star=Y_STAR_MAP[setup_name],
             n_estimators=tabpfn_n_estimators,
             average_before_softmax=tabpfn_average_before_softmax,
             softmax_temperature=1.0,
@@ -75,8 +73,10 @@ def main(cfg: DictConfig):
     else:
         raise ValueError(f"Unknown data {data}")
 
-    X = setup.X
-    y = setup.y
+    x_prev = setup.X
+    y_prev = setup.y
+    x_grid = np.linspace(-10, 10, m).reshape(-1, 1)
+    t = np.array([Y_STAR_MAP[setup_name]])
 
     logging.info(f"Saving outputs to {savedir}")
 
@@ -86,18 +86,18 @@ def main(cfg: DictConfig):
     )
 
     start = timer()
-    g0_to_gn = credible_set.compute_g0_to_gn(clf, x_grid, X, y)
+    g0_to_gn = credible_set.compute_g0_to_gn(clf, t, x_grid, x_prev, y_prev)
     utils.write_to_local(f"{savedir}/g0_to_gn.pickle", g0_to_gn)
     logging.info(f"Built g0_to_gn in {timer() - start:.2f} seconds")
 
     start = timer()
-    gn = credible_set.compute_gn(clf, x_grid, X, y)
+    gn = credible_set.compute_gn(clf, t, x_grid, x_prev, y_prev)
     utils.write_to_local(f"{savedir}/gn.pickle", gn)
     logging.info(f"Built gn in {timer() - start:.2f} seconds")
 
     start = timer()
     gn_plus_1 = credible_set.sample_gn_plus_1(
-        key_others, clf, x_grid, X, y, size=mc_samples
+        key_others, clf, t, x_grid, x_prev, y_prev, size=mc_samples
     )
     utils.write_to_local(f"{savedir}/gn_plus_1.pickle", gn_plus_1)
     logging.info(f"Built gn_plus_1 in {timer() - start:.2f} seconds")
