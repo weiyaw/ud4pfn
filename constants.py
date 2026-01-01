@@ -5,7 +5,8 @@ REGRESSION = [
     "gamma-linear",
     "gaussian-sine",
     "poisson-linear",
-    "gamma"
+    "gamma",
+    "gaussian-linear-susan",
 ]
 
 CLASSIFICATION = [

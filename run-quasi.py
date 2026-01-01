@@ -16,8 +16,8 @@ import utils
 import os
 import data
 
-from pred_rule import TabPFNClassifierPPD, TabPFNRegressorPPD
 from constants import REGRESSION, CLASSIFICATION, Y_STAR_MAP
+from pred_rule import TabPFNClassifierPPD, TabPFNRegressorPPD
 
 os.environ["TABPFN_DISABLE_TELEMETRY"] = "1"
 
@@ -122,7 +122,7 @@ def main(cfg: DictConfig):
     x_new = np.zeros((1, x_prev.shape[1]), dtype=np.float32)
     t = np.array([Y_STAR_MAP[setup_name]])
     if setup_name == "gaussian-linear-susan":
-        x_new = np.array([0.5, 0.5])
+        x_new = np.array([[0.5, 0.5]])
         t = np.array([2.5])
 
     savedir = Path(hydra.core.hydra_config.HydraConfig.get().runtime.output_dir)
@@ -131,7 +131,6 @@ def main(cfg: DictConfig):
     # ------------------------------------------------------------
     # 2.  Initialize Classifier/Regressor
     # ------------------------------------------------------------
-
     if setup_name in REGRESSION:
         clf = TabPFNRegressorPPD(
             n_estimators=n_estimators,

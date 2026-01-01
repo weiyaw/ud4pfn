@@ -1,4 +1,4 @@
-# %%
+
 from pred_rule import TabPFNClassifierPPD, TabPFNRegressorPPD, assert_ppd_args_shape
 import warnings
 from typing import Callable
@@ -146,6 +146,9 @@ def compute_vn(g0_to_gn, type="simultaneous"):
 def compute_pointwise_coverage(true_curve, bands):
     # check if each point in the grid is covered, then average over grid points
     intervals = [(b["lower"], b["upper"]) for b in bands]
+    for l, u in intervals:
+        assert true_curve.shape == l.shape == u.shape
+
     if any(np.any(np.isnan(l)) or np.any(np.isnan(u)) for l, u in intervals):
         return np.nan
 
@@ -156,6 +159,9 @@ def compute_pointwise_coverage(true_curve, bands):
 def compute_simultaneous_coverage(true_curve, bands):
     # coverage of the entire curve
     intervals = [(b["lower"], b["upper"]) for b in bands]
+    for l, u in intervals:
+        assert true_curve.shape == l.shape == u.shape
+
     if any(np.any(np.isnan(l)) or np.any(np.isnan(u)) for l, u in intervals):
         return np.nan
 
@@ -364,3 +370,5 @@ def build_ellipsoid_band(mean, cov, alpha: float = 0.05):
 #         g_hat[k, :] = cdf_vals.numpy()
 
 #     return g_hat
+
+# %%

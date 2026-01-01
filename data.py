@@ -181,28 +181,32 @@ class GaussianPolynomial(Data):
         # return the P(Y <= t | x) of Gaussian at mean=true_curve(x), sd=0.5
         mean, noise_std = self._param(x)
         cdf = norm.cdf(t, loc=mean, scale=noise_std)
+        assert cdf.shape == (x.shape[0],)
         return cdf.astype(np.float32)
 
 
 class GaussianLinearDependentError(Data):
 
     def _params(self, x: np.ndarray):
+        assert x.ndim == 2 and x.shape[1] == 1
         a = 0.5
         b = 1.0
-        mean = (a * x + b).astype(np.float32)
+        mean = (a * x + b).astype(np.float32).squeeze(-1)
         # Higher |x| -> larger noise variance
-        noise_std = 0.5 + 0.5 * np.abs(x)
+        noise_std = (0.5 + 0.5 * np.abs(x)).squeeze(-1)
+        assert mean.shape == (x.shape[0],)
+        assert noise_std.shape == (x.shape[0],)
         return mean, noise_std
 
     def get_y(self, key, x):
-        mean, noise_std = self._params(x.ravel())
-
-        y = mean + jr.normal(key, shape=x.ravel().shape) * noise_std
+        mean, noise_std = self._params(x)
+        # mean is (N,), noise_std is (N,)
+        y = mean + jr.normal(key, shape=mean.shape) * noise_std
         return np.array(y).astype(np.float32)
 
     def get_true_event(self, x: np.ndarray, t: float) -> np.ndarray:
         # return the P(Y <= t | x) of Gaussian at mean=true_curve(x), sd=noise_std(x)
-        mean, noise_std = self._params(x.ravel())
+        mean, noise_std = self._params(x)
         cdf = norm.cdf(t, loc=mean, scale=noise_std)
         return cdf.astype(np.float32)
 
@@ -212,27 +216,33 @@ class GammaLinear(Data):
 
     def _params(self, x: np.ndarray):
         """Compute Gamma distribution parameters with linear mean."""
+        assert x.ndim == 2 and x.shape[1] == 1
         a = 0.12
         b = 4.0
         mean = a * x + b  # mean > 0 for x in [-10,10]
         # Shape increases with |x|
         shape = 8.0 + 2.0 * np.abs(x)
         scale = mean / shape
-        return shape.astype(np.float32), scale.astype(np.float32)
+        
+        shape = shape.astype(np.float32).squeeze(-1)
+        scale = scale.astype(np.float32).squeeze(-1)
+        
+        assert shape.shape == (x.shape[0],)
+        assert scale.shape == (x.shape[0],)
+        return shape, scale
 
     def get_y(self, key, x):
         # Sample directly from Gamma(shape(x), scale(x)) with linear mean.
-        assert x.ndim == 2 and x.shape[1] == 1
-        shape, scale = self._params(x.ravel())
+        shape, scale = self._params(x)
         assert shape.shape == scale.shape
         y = jr.gamma(key, shape) * scale
         return np.array(y).astype(np.float32)
 
     def get_true_event(self, x: np.ndarray, t: float) -> np.ndarray:
         # return the P(Y <= t | x) of Gamma at shape(x), scale(x)
-        assert x.ndim == 2 and x.shape[1] == 1
-        shape, scale = self._params(x.ravel())
+        shape, scale = self._params(x)
         cdf = gamma.cdf(t, a=shape, scale=scale)
+        assert cdf.shape == (x.shape[0],)
         return cdf.astype(np.float32)
 
 
@@ -240,24 +250,27 @@ class GaussianSine(Data):
 
     def _params(self, x: np.ndarray):
         # sine function
+        assert x.ndim == 2 and x.shape[1] == 1
         a = 0.5
         b = 0.0
-        mean = a * np.sin(x / 2) + b
+        mean = (a * np.sin(x / 2) + b).squeeze(-1)
         noise_std = 0.5
+        assert mean.shape == (x.shape[0],)
         return mean, noise_std
 
     def get_y(self, key, x):
         # sine function plus constant Gaussian noise
         # true curve evaluated at observed X
         assert x.ndim == 2 and x.shape[1] == 1
-        mean, noise_std = self._params(x.ravel())
-        y = mean + jr.normal(key, shape=x.ravel().shape) * noise_std
+        mean, noise_std = self._params(x)
+        y = mean + jr.normal(key, shape=mean.shape) * noise_std
         return np.array(y).astype(np.float32)
 
     def get_true_event(self, x: np.ndarray, t: float) -> np.ndarray:
         # return the P(Y <= t | x) of Gaussian at mean=true_curve(x), sd=0.1
         mean, noise_std = self._params(x)
         cdf = norm.cdf(t, loc=mean, scale=noise_std)
+        assert cdf.shape == (x.shape[0],)
         return cdf.astype(np.float32)
 
 
@@ -267,22 +280,26 @@ class PoissonLinear(Data):
     def _params(self, x: np.ndarray) -> np.ndarray:
         # parabola: y = a(x^2 - 80) + 5
         # choose a > 0 for positive opening, scaled appropriately
+        assert x.ndim == 2 and x.shape[1] == 1
         a = 0.05
         rate = a * (x**2 - 80.0) + 5.0  # shift up to keep positive
-        return rate.astype(np.float32)
+        rate = rate.astype(np.float32).squeeze(-1)
+        assert rate.shape == (x.shape[0],)
+        return rate
 
     def get_y(self, key, x):
         # linear function plus poisson noise
         assert x.ndim == 2 and x.shape[1] == 1
-        rate = self._params(x.ravel())
+        rate = self._params(x)
         # Poisson expects rate parameter (non-negative)
         y = jr.poisson(key, rate)
         return np.array(y).astype(np.int32)
 
     def get_true_event(self, x: np.ndarray, t: int) -> np.ndarray:
         # return the P(y <= t | x) of Poisson at rate=true_curve(x)
-        rate = self._params(x.ravel())
+        rate = self._params(x)
         cdf = poisson.cdf(t, rate)
+        assert cdf.shape == (x.shape[0],)
         return cdf.astype(np.float32)
 
 
@@ -290,19 +307,22 @@ class ProbitMixture(Data):
     # good t = 1
 
     def _params(self, x: np.ndarray) -> np.ndarray:
+        assert x.ndim == 2 and x.shape[1] == 1
         p = 0.6 * norm.cdf((x - 8.0) / 4.0) + 0.4 * norm.cdf((x + 8.0) / 4.0)
-        return p.astype(np.float32)
+        p = p.astype(np.float32).squeeze(-1)
+        assert p.shape == (x.shape[0],)
+        return p
 
     def get_y(self, key, x):
         # mixture probit: probability as true curve at observed X
         assert x.ndim == 2 and x.shape[1] == 1
-        p = self._params(x.ravel())
-        y = (jr.uniform(key, shape=x.ravel().shape) < p).astype(np.int32)
+        p = self._params(x)
+        y = (jr.uniform(key, shape=p.shape) < p).astype(np.int32)
         return np.array(y)
 
     def get_true_event(self, x: np.ndarray, t: int) -> np.ndarray:
         # return the P(Y = t | x) of mixture probit at observed X
-        p = self._params(x.ravel())
+        p = self._params(x)
         if t == 1:
             return p.astype(np.float32)
         else:
@@ -314,10 +334,14 @@ class CategoricalLinear(Data):
     # good t = 1
 
     def _params(self, x: np.ndarray) -> np.ndarray:
-        # x is shape (n,)
+        # x is shape (n, 1)
         # logits: (n, 4)
+        assert x.ndim == 2 and x.shape[1] == 1
         n = x.shape[0]
         logits = np.zeros((n, 4), dtype=np.float32)
+        
+        # We need to squeeze only for assignment to logits[:, k] which expects (n,)
+        x = x.squeeze(-1)
 
         # Class 0: mostly in [-10, 0] -> center -5
         logits[:, 0] = -1.0 * (x + 5.0) ** 2 / 10.0
@@ -332,12 +356,13 @@ class CategoricalLinear(Data):
         max_logits = np.max(logits, axis=1, keepdims=True)
         exp_logits = np.exp(logits - max_logits)
         probs = exp_logits / np.sum(exp_logits, axis=1, keepdims=True)
+        assert probs.shape == (n, 4)
         return probs
 
     def get_y(self, key, x):
         # function to get logits, then softmax to get probabilities
         assert x.ndim == 2 and x.shape[1] == 1
-        probs = self._params(x.ravel())
+        probs = self._params(x)
         n = probs.shape[0]
 
         # Sample
@@ -350,7 +375,7 @@ class CategoricalLinear(Data):
 
     def get_true_event(self, x: np.ndarray, t: int) -> np.ndarray:
         # return the P(y = t | x)
-        probs = self._params(x.ravel())
+        probs = self._params(x)
         return probs[:, t]
 
 
@@ -373,20 +398,23 @@ class LogisticLinear(Data):
 
     def _params(self, x: np.ndarray) -> np.ndarray:
         # P(Y=1|X) = sigmoid(a*x + b)
+        assert x.ndim == 2 and x.shape[1] == 1
         a = 0.2
         b = -0.4
         logits = a * x + b
         p = 1.0 / (1.0 + np.exp(-logits))
-        return p.astype(np.float32)
+        p = p.astype(np.float32).squeeze(-1)
+        assert p.shape == (x.shape[0],)
+        return p
 
     def get_y(self, key, x):
         assert x.ndim == 2 and x.shape[1] == 1
-        p = self._params(x.ravel())
-        y = (jr.uniform(key, shape=x.ravel().shape) < p).astype(np.int32)
+        p = self._params(x)
+        y = (jr.uniform(key, shape=p.shape) < p).astype(np.int32)
         return np.array(y)
 
     def get_true_event(self, x: np.ndarray, t: int) -> np.ndarray:
-        p = self._params(x.ravel())
+        p = self._params(x)
         if t == 1:
             return p
         else:
