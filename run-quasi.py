@@ -151,9 +151,10 @@ def main(cfg: DictConfig):
     # Run one outer path (indexed by outer_idx). We simulate adding data points (up to n_horizon)
     # and compute the delta term.
 
-    k_samp = np.unique(np.logspace(np.log10(1), np.log10(n_horizon), 10).astype(int))
+    # k_samp = np.unique(np.logspace(np.log10(1), np.log10(n_horizon), 10).astype(int))
+    k_samp = np.unique(np.linspace(1, n_horizon, 20).astype(int))
     np.save(savedir / "k_samp.npy", k_samp)
-    logging.info(f"k_samp shape: {k_samp.shape}")
+    logging.info(f"k_samp: {k_samp.tolist()}")
 
     loopkey_outer = jr.fold_in(key_outer, outer_idx)
     tag = f"outer{outer_idx}"
