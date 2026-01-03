@@ -22,3 +22,11 @@ Y_STAR_MAP = {
     "gamma": 2.5,
     "poisson-linear": 1,
 }
+
+T_MAP = {
+    **{k: [-2.0, -1.0, 0.0, 1.0, 2.0] for k in REGRESSION},
+    **{k: [0.0, 1.0] for k in CLASSIFICATION},
+    "gamma-linear": [1.0, 2.0, 3.0],
+    "poisson-linear": [1.0, 2.0, 3.0],
+    "gamma": [1.0, 2.0, 3.0],
+}

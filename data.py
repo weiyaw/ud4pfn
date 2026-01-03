@@ -130,6 +130,7 @@ class GaussianLinear(Data):
         # return the P(Y <= t | x) of Gaussian at mean=true_curve(x), sd=0.5
         mean, noise_std = self._param(x)
         cdf = norm.cdf(t, loc=mean, scale=noise_std)
+        assert cdf.shape == (x.shape[0],)
         return cdf.astype(np.float32)
 
 
@@ -154,6 +155,7 @@ class GaussianLinearSusan(Data):
         # return the P(Y <= t | x) of Gaussian at mean=true_curve(x), sd=0.5
         mean, noise_std = self._param(x)
         cdf = norm.cdf(t, loc=mean, scale=noise_std)
+        assert cdf.shape == (x.shape[0],)
         return cdf.astype(np.float32)
 
     def get_x(self, key, n, x_design):
@@ -207,6 +209,7 @@ class GaussianLinearDependentError(Data):
         # return the P(Y <= t | x) of Gaussian at mean=true_curve(x), sd=noise_std(x)
         mean, noise_std = self._params(x)
         cdf = norm.cdf(t, loc=mean, scale=noise_std)
+        assert cdf.shape == (x.shape[0],)
         return cdf.astype(np.float32)
 
 
@@ -222,10 +225,10 @@ class GammaLinear(Data):
         # Shape increases with |x|
         shape = 8.0 + 2.0 * np.abs(x)
         scale = mean / shape
-        
+
         shape = shape.astype(np.float32).squeeze(-1)
         scale = scale.astype(np.float32).squeeze(-1)
-        
+
         assert shape.shape == (x.shape[0],)
         assert scale.shape == (x.shape[0],)
         return shape, scale
@@ -322,10 +325,9 @@ class ProbitMixture(Data):
     def get_true_event(self, x: np.ndarray, t: int) -> np.ndarray:
         # return the P(Y = t | x) of mixture probit at observed X
         p = self._params(x)
-        if t == 1:
-            return p.astype(np.float32)
-        else:
-            return (1.0 - p).astype(np.float32)
+        ret = t * p + (1 - t) * (1 - p)
+        assert ret.shape == (x.shape[0],)
+        return ret.astype(np.float32)
 
 
 class CategoricalLinear(Data):
@@ -338,7 +340,7 @@ class CategoricalLinear(Data):
         assert x.ndim == 2 and x.shape[1] == 1
         n = x.shape[0]
         logits = np.zeros((n, 4), dtype=np.float32)
-        
+
         # We need to squeeze only for assignment to logits[:, k] which expects (n,)
         x = x.squeeze(-1)
 
@@ -375,7 +377,9 @@ class CategoricalLinear(Data):
     def get_true_event(self, x: np.ndarray, t: int) -> np.ndarray:
         # return the P(y = t | x)
         probs = self._params(x)
-        return probs[:, t]
+        ret = probs[:, t]
+        assert ret.shape == (x.shape[0],)
+        return ret
 
 
 class Gamma(Data):
@@ -389,7 +393,9 @@ class Gamma(Data):
     def get_true_event(self, x: np.ndarray, t: int) -> np.ndarray:
         # return the P(y <= t | x) of Gamma(shape=2, scale=2)
         cdf = gamma.cdf(t, a=2, scale=2)
-        return np.full(x.shape[0], cdf, dtype=np.float32)
+        ret = np.full(x.shape[0], cdf, dtype=np.float32)
+        assert ret.shape == (x.shape[0],)
+        return ret
 
 
 class LogisticLinear(Data):
@@ -414,10 +420,9 @@ class LogisticLinear(Data):
 
     def get_true_event(self, x: np.ndarray, t: int) -> np.ndarray:
         p = self._params(x)
-        if t == 1:
-            return p
-        else:
-            return 1.0 - p
+        ret = t * p + (1 - t) * (1 - p)
+        assert ret.shape == (x.shape[0],)
+        return ret
 
 
 class TwoMoons: ...

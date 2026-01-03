@@ -16,7 +16,7 @@ import utils
 import os
 import data
 
-from constants import REGRESSION, CLASSIFICATION, Y_STAR_MAP
+from constants import REGRESSION, CLASSIFICATION, T_MAP
 from pred_rule import TabPFNClassifierPPD, TabPFNRegressorPPD, assert_ppd_args_shape
 
 os.environ["TABPFN_DISABLE_TELEMETRY"] = "1"
@@ -180,14 +180,7 @@ def main(cfg: DictConfig):
 
     # Query covariate: 0.0 for 1D/2D (center of domain)
     x_new = np.zeros((1, x_prev.shape[1]))
-    if setup_name.startswith("gaussian"):
-        t = np.array([-1.0, 0.0, 1.0])
-    elif setup_name == "gamma":
-        t = np.array([1.0, 2.0, 3.0])
-    elif setup_name == "logistic-linear":
-        t = np.array([0, 1])
-    elif setup_name == "probit-mixture":
-        t = np.array([0, 1])
+    t = np.array(T_MAP[setup_name])
 
     savedir = Path(hydra.core.hydra_config.HydraConfig.get().runtime.output_dir)
     logging.info(f"Experiment directory: {savedir}")
@@ -199,12 +192,14 @@ def main(cfg: DictConfig):
         clf = TabPFNRegressorPPD(
             n_estimators=n_estimators,
             softmax_temperature=1.0,
+            fit_mode="low_memory",
             model_path="tabpfn-model/tabpfn-v2.5-regressor-v2.5_default.ckpt",
         )
     elif setup_name in CLASSIFICATION:
         clf = TabPFNClassifierPPD(
             n_estimators=n_estimators,
             softmax_temperature=1.0,
+            fit_mode="low_memory",
             model_path="tabpfn-model/tabpfn-v2.5-classifier-v2.5_default.ckpt",
         )
     else:
@@ -232,7 +227,7 @@ def main(cfg: DictConfig):
         )
 
         assert delta_path.shape == (t.shape[0], k_points.size)
-        utils.write_to(save_path, {"delta": delta_path, "k": k_points})
+        utils.write_to(save_path, {"delta": delta_path, "k": k_points, "t": t})
         logging.info(f"Built {tag} in {timer() - start:.2f} seconds")
 
 

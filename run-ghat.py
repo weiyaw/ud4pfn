@@ -18,7 +18,7 @@ import credible_set
 from pred_rule import TabPFNClassifierPPD, TabPFNRegressorPPD
 import data
 
-from constants import REGRESSION, CLASSIFICATION, Y_STAR_MAP
+from constants import REGRESSION, CLASSIFICATION, T_MAP
 
 os.environ["TABPFN_DISABLE_TELEMETRY"] = "1"
 
@@ -36,8 +36,7 @@ def main(cfg: DictConfig):
     mc_samples = int(cfg.mc_samples)
     setup_name = cfg.setup
     seed = int(cfg.seed)
-    tabpfn_n_estimators = int(cfg.n_estimators)
-    tabpfn_average_before_softmax = cfg.average_before_softmax
+    n_estimators = int(cfg.n_estimators)
 
     torch.manual_seed(8655 + seed)
     key = jr.key(1907 + seed)
@@ -56,16 +55,14 @@ def main(cfg: DictConfig):
 
     if setup_name in REGRESSION:
         clf = TabPFNRegressorPPD(
-            n_estimators=tabpfn_n_estimators,
-            average_before_softmax=tabpfn_average_before_softmax,
+            n_estimators=n_estimators,
             softmax_temperature=1.0,
             fit_mode="low_memory",
             model_path="tabpfn-model/tabpfn-v2-regressor.ckpt",
         )
     elif setup_name in CLASSIFICATION:
         clf = TabPFNClassifierPPD(
-            n_estimators=tabpfn_n_estimators,
-            average_before_softmax=tabpfn_average_before_softmax,
+            n_estimators=n_estimators,
             softmax_temperature=1.0,
             fit_mode="low_memory",
             model_path="tabpfn-model/tabpfn-v2-classifier.ckpt",
@@ -76,13 +73,23 @@ def main(cfg: DictConfig):
     x_prev = setup.X
     y_prev = setup.y
     x_grid = np.linspace(-10, 10, m).reshape(-1, 1)
-    t = np.array([Y_STAR_MAP[setup_name]])
+    t = np.array(T_MAP[setup_name])
 
     logging.info(f"Saving outputs to {savedir}")
 
+    # Save this in case we need to inspect data generating distribution
+    utils.write_to_local(f"{savedir}/setup.pickle", setup)
+
+    # This is pure numpy array, so it's faster to load
     utils.write_to_local(
         f"{savedir}/data.pickle",
-        {"setup": setup, "x_grid": x_grid},
+        {
+            "x_prev": x_prev,
+            "y_prev": y_prev,
+            "t": t,
+            "x_grid": x_grid,
+            "true_prob": np.stack([setup.get_true_event(x_grid, st) for st in t]).shape,
+        },
     )
 
     start = timer()

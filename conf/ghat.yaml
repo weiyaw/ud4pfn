@@ -9,7 +9,6 @@ shuffle_data: True
 seed: 999
 
 n_estimators: 64
-average_before_softmax: False
 mc_samples: 1000                # num of monte carlo samples in u_{n+1} estimator
 
 
