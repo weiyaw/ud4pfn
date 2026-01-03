@@ -5,7 +5,7 @@ setup: "gaussian-linear"
 data_size: 100
 x_grid_size: 100
 x_design: "one-gap"
-shuffle_data: False
+shuffle_data: True
 seed: 999
 
 n_estimators: 64

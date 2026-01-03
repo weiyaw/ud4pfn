@@ -27,13 +27,34 @@ class TabPFNRegressorPPD(TabPFNRegressor):
 
     def sample(
         self,
-        key: jr.key,
+        key: jax.random.key,
         x_new: np.ndarray,
         x_prev: np.ndarray,
         y_prev: np.ndarray,
         size: int = 1,
     ) -> tuple[np.ndarray, dict]:
-        # Sample from predictive density
+        """
+        Sample from predictive density
+
+        Parameters
+        ----------
+        key : jax.random.key
+            Random key.
+        x_new : (m, d) array
+            Query covariates.
+        x_prev : (n, d) array
+            Historical covariates.
+        y_prev : (n,) array
+            Historical targets.
+        size : int, default=1
+            Number of samples.
+
+        Return:
+        -------
+        tuple[np.ndarray, dict]
+            Sampled values and additional information.
+            Shape: (size, m)
+        """
         assert_ppd_args_shape(x_new, x_prev, y_prev)
         self.fit(x_prev, y_prev)
         with warnings.catch_warnings():
@@ -145,7 +166,7 @@ class TabPFNClassifierPPD(TabPFNClassifier):
 
         Parameters
         ----------
-        key : jr.key
+        key : jax.random.key
             Random key.
         x_new : (m, d) array
             Query covariates.
