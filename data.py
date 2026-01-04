@@ -1,5 +1,6 @@
 # %%
 from abc import abstractmethod
+import math
 import numpy as np
 import jax
 import jax.numpy as jnp
@@ -19,13 +20,14 @@ class Data:
     def __repr__(self) -> str:
         return f"{self.__class__.__name__}(key, X=np.ndarray{self.X.shape}, y=np.ndarray{self.y.shape}, x_design='{self.x_design}')"
 
-    def __init__(
-        self,
-        key: jr.key,
-        n: int,
-        shuffle: bool = False,
-        x_design: str = "one-gap",
-    ):
+    @abstractmethod
+    def get_true_event(self, x: np.ndarray, t: float | int) -> np.ndarray:
+        """Return the true probability of event evaluated at x (1-D array)."""
+        pass
+
+
+class Data1D(Data):
+    def __init__(self, key: jax.random.key, n: int, shuffle: bool, x_design: str):
         self.key = key
         self.x_design = x_design
         key_x, key_y, key_shuffle = jr.split(key, 3)
@@ -38,7 +40,7 @@ class Data:
             self.X = self.X[perm]
             self.y = self.y[perm]
 
-    def get_x(self, key, n, x_design="one-gap") -> np.ndarray:
+    def get_x(self, key: jax.random.key, n: int, x_design: str) -> np.ndarray:
         # uniform between -10 and 10. no data in the gaps
         if x_design == "one-gap":
             key1, key2 = jr.split(key)
@@ -53,8 +55,6 @@ class Data:
             xs = jnp.concatenate([xs1, xs2, xs3])
         elif x_design == "uniform-1d":
             xs = jr.uniform(key, shape=(n,), minval=-10, maxval=10)
-        elif x_design == "uniform-2d":
-            xs = jr.uniform(key, shape=(n, 2), minval=-10, maxval=10)
         else:
             raise ValueError(f"Unknown design='{x_design}'")
         if xs.ndim == 1:
@@ -62,54 +62,57 @@ class Data:
         return np.array(xs)
 
     @abstractmethod
-    def get_y(self, key, x) -> np.ndarray:
+    def get_y(self, key: jax.random.key, x: np.ndarray) -> np.ndarray:
         pass
 
-    @abstractmethod
-    def get_true_event(self, x: np.ndarray, t: float | int) -> np.ndarray:
-        """Return the true probability of event evaluated at x (1-D array)."""
-        pass
-
-    def visualise(self, figsize=(8, 5)):
-        # visualise data and true curve
+    def visualise(self, figsize=(8, 5)) -> None:
+        # visualise data
         import matplotlib.pyplot as plt
 
-        assert self.X.ndim == 2 and self.X.shape[1] == 1
+        assert self.X.shape[1] == 1
+        x = self.X[:, 0]
 
         plt.figure(figsize=figsize)
-        x = self.X[:, 0]
         plt.scatter(x, self.y, alpha=0.5, label="data")
-        x_grid = np.linspace(x.min(), x.max(), 200, dtype=np.float32)[:, None]
-        plt.title(f"{self.__class__.__name__} ({self.x_design} design)")
         plt.xlabel("X")
         plt.ylabel("y")
         plt.legend()
         plt.grid()
+        plt.title(f"{self.__class__.__name__} ({self.x_design} design)")
         plt.show()
 
     def visualise_true_event(self):
+        # visualise true probability of event
         import matplotlib.pyplot as plt
         import utils
-        from constants import Y_STAR_MAP
+        from constants import T_MAP
 
-        assert self.X.ndim == 2 and self.X.shape[1] == 1
+        assert self.X.ndim == 2
+        assert self.X.shape[1] == 1
 
         setup_name = utils.camel_to_kebab(self.__class__.__name__)
-        t = Y_STAR_MAP[setup_name]
-        plt.figure(figsize=(8, 5))
-        x = self.X[:, 0]
-        x_grid = np.linspace(x.min(), x.max(), 200, dtype=np.float32)[:, None]
-        plt.plot(x_grid, self.get_true_event(x_grid, t), label="true event")
-        plt.title(f"{setup_name} ({self.x_design} design)")
-        plt.xlabel("X")
-        plt.ylabel(f"P(Y <= {t} | X)")
-        plt.ylim(-0.01, 1.01)
-        plt.legend()
-        plt.grid()
+        t_values = T_MAP[setup_name]
+        n_plots = len(t_values)
+        fig, axes = plt.subplots(1, n_plots, figsize=(6 * n_plots, 5), squeeze=False)
+        axes = axes.flatten()
+
+        for ax, t in zip(axes, t_values):
+            # if x is 1D
+            x = self.X[:, 0]
+            x_grid = np.linspace(x.min(), x.max(), 200, dtype=np.float32)[:, None]
+            ax.plot(x_grid, self.get_true_event(x_grid, t), label="true event")
+            ax.set_title(f"{setup_name} ({self.x_design} design)\nt={t}")
+            ax.set_xlabel("X")
+            ax.set_ylabel(f"P(Y <= {t} | X)")
+            ax.set_ylim(-0.01, 1.01)
+            ax.legend()
+            ax.grid()
+
+        plt.tight_layout()
         plt.show()
 
 
-class GaussianLinear(Data):
+class GaussianLinear(Data1D):
 
     def _param(self, x: np.ndarray):
         assert x.ndim == 2 and x.shape[1] == 1
@@ -134,35 +137,7 @@ class GaussianLinear(Data):
         return cdf.astype(np.float32)
 
 
-class GaussianLinearSusan(Data):
-
-    def _param(self, x: np.ndarray):
-        assert x.ndim == 2 and x.shape[1] == 2
-        alpha = 1.0
-        beta = np.array([1.5, -0.8])
-        mean = alpha + beta @ x.T
-        noise_std = 0.7
-        assert mean.shape == (x.shape[0],)
-        return mean, noise_std
-
-    def get_y(self, key, x):
-        # linear function plus constant Gaussian noise
-        mean, noise_std = self._param(x)
-        y = mean + jr.normal(key, shape=mean.shape) * noise_std
-        return np.array(y).astype(np.float32)
-
-    def get_true_event(self, x: np.ndarray, t: float) -> np.ndarray:
-        # return the P(Y <= t | x) of Gaussian at mean=true_curve(x), sd=0.5
-        mean, noise_std = self._param(x)
-        cdf = norm.cdf(t, loc=mean, scale=noise_std)
-        assert cdf.shape == (x.shape[0],)
-        return cdf.astype(np.float32)
-
-    def get_x(self, key, n, x_design):
-        return jr.uniform(key, shape=(n, 2), minval=0, maxval=1)
-
-
-class GaussianPolynomial(Data):
+class GaussianPolynomial(Data1D):
 
     def _param(self, x):
         # Polynomial passing through (-10, -2), (0, 1), (10, -2)
@@ -186,7 +161,7 @@ class GaussianPolynomial(Data):
         return cdf.astype(np.float32)
 
 
-class GaussianLinearDependentError(Data):
+class GaussianLinearDependentError(Data1D):
 
     def _params(self, x: np.ndarray):
         assert x.ndim == 2 and x.shape[1] == 1
@@ -213,7 +188,7 @@ class GaussianLinearDependentError(Data):
         return cdf.astype(np.float32)
 
 
-class GammaLinear(Data):
+class GammaLinear(Data1D):
     # good y^*: between 4 and 5
 
     def _params(self, x: np.ndarray):
@@ -248,7 +223,7 @@ class GammaLinear(Data):
         return cdf.astype(np.float32)
 
 
-class GaussianSine(Data):
+class GaussianSine(Data1D):
 
     def _params(self, x: np.ndarray):
         # sine function
@@ -276,7 +251,7 @@ class GaussianSine(Data):
         return cdf.astype(np.float32)
 
 
-class PoissonLinear(Data):
+class PoissonLinear(Data1D):
     # good t = 1
 
     def _params(self, x: np.ndarray) -> np.ndarray:
@@ -305,7 +280,7 @@ class PoissonLinear(Data):
         return cdf.astype(np.float32)
 
 
-class ProbitMixture(Data):
+class ProbitMixture(Data1D):
     # good t = 1
 
     def _params(self, x: np.ndarray) -> np.ndarray:
@@ -330,7 +305,7 @@ class ProbitMixture(Data):
         return ret.astype(np.float32)
 
 
-class CategoricalLinear(Data):
+class CategoricalLinear(Data1D):
     # four categories: 0,1,2,3
     # good t = 1
 
@@ -382,7 +357,7 @@ class CategoricalLinear(Data):
         return ret
 
 
-class Gamma(Data):
+class Gamma(Data1D):
     # good t = 2.5
 
     def get_y(self, key, x):
@@ -398,7 +373,7 @@ class Gamma(Data):
         return ret
 
 
-class LogisticLinear(Data):
+class LogisticLinear(Data1D):
     # good t = 1
 
     def _params(self, x: np.ndarray) -> np.ndarray:
@@ -425,193 +400,169 @@ class LogisticLinear(Data):
         return ret
 
 
-class TwoMoons: ...
+class Data2D(Data):
+
+    def __init__(
+        self, key: jax.random.key, n: int, shuffle: bool, x_design: str = None
+    ):
+        self.key = key
+        self.x_design = x_design
+        key_data, key_shuffle = jr.split(key)
+        self.X, self.y = self.get_x_and_y(key_data, n)
+
+        if shuffle:
+            perm = jr.permutation(key_shuffle, n)
+            self.X = self.X[perm]
+            self.y = self.y[perm]
+
+    @abstractmethod
+    def get_x_and_y(self, key: jax.random.key, n: int) -> tuple[np.ndarray, np.ndarray]:
+        pass
+
+    def visualise(self, figsize=(8, 5)) -> None:
+        # visualise data and true curve
+        import matplotlib.pyplot as plt
+
+        assert self.X.ndim == 2
+        assert self.X.shape[1] == 2
+
+        plt.figure(figsize=figsize)
+
+        x1 = self.X[:, 0]
+        x2 = self.X[:, 1]
+        sc = plt.scatter(x1, x2, c=self.y, alpha=0.5, label="data")
+        plt.colorbar(sc, label="y")
+        plt.xlabel("X1")
+        plt.ylabel("X2")
+
+        plt.legend()
+        plt.grid()
+        plt.title(f"{self.__class__.__name__} ({self.x_design} design)")
+        plt.show()
+
+    def visualise_true_event(self) -> None:
+        import matplotlib.pyplot as plt
+        import utils
+        from constants import T_MAP
+
+        assert self.X.ndim == 2
+        assert self.X.shape[1] == 2
+
+        setup_name = utils.camel_to_kebab(self.__class__.__name__)
+        t_values = T_MAP[setup_name]
+        n_plots = len(t_values)
+        fig, axes = plt.subplots(1, n_plots, figsize=(6 * n_plots, 5), squeeze=False)
+        axes = axes.flatten()
+
+        for ax, t in zip(axes, t_values):
+            # if x is 2D, plot a heatmap of the probability
+            x1 = self.X[:, 0]
+            x2 = self.X[:, 1]
+            x1_grid = np.linspace(x1.min(), x1.max(), 200, dtype=np.float32)
+            x2_grid = np.linspace(x2.min(), x2.max(), 200, dtype=np.float32)
+            x1_grid, x2_grid = np.meshgrid(x1_grid, x2_grid)
+            x_grid = np.stack([x1_grid, x2_grid], axis=-1)
+            ax.imshow(
+                self.get_true_event(x_grid, t),
+                extent=[x1.min(), x1.max(), x2.min(), x2.max()],
+                aspect="auto",
+                origin="lower",
+            )
+            ax.set_title(f"{setup_name} ({self.x_design} design)\nt={t}")
+            ax.set_xlabel("X1")
+            ax.set_ylabel("X2")
+            ax.legend()
+            ax.grid()
+
+        plt.tight_layout()
+        plt.show()
 
 
-class Spiral: ...
+class GaussianLinearSusan(Data2D):
+
+    def _param(self, x: np.ndarray):
+        assert x.ndim == 2 and x.shape[1] == 2
+        alpha = 1.0
+        beta = np.array([1.5, -0.8])
+        mean = alpha + beta @ x.T
+        noise_std = 0.7
+        assert mean.shape == (x.shape[0],)
+        return mean, noise_std
+
+    def get_x_and_y(self, key, n):
+        x = jr.uniform(key, shape=(n, 2), minval=0, maxval=1)
+        # linear function plus constant Gaussian noise
+        mean, noise_std = self._param(x)
+        y = mean + jr.normal(key, shape=mean.shape) * noise_std
+        return np.array(x), np.array(y).astype(float)
+
+    def get_true_event(self, x: np.ndarray, t: float) -> np.ndarray:
+        # return the P(Y <= t | x) of Gaussian at mean=true_curve(x), sd=0.5
+        mean, noise_std = self._param(x)
+        cdf = norm.cdf(t, loc=mean, scale=noise_std)
+        assert cdf.shape == (x.shape[0],)
+        return cdf.astype(float)
+
+
+class TwoMoons(Data2D):
+    def get_x_and_y(self, key, n):
+        n_out = n // 2
+        n_in = n - n_out
+
+        outer_circ_x = np.cos(np.linspace(0, np.pi, n_out))
+        outer_circ_y = np.sin(np.linspace(0, np.pi, n_out))
+        inner_circ_x = 1 - np.cos(np.linspace(0, np.pi, n_in))
+        inner_circ_y = 1 - np.sin(np.linspace(0, np.pi, n_in)) - 0.5
+
+        X = np.vstack(
+            [
+                np.append(outer_circ_x, inner_circ_x),
+                np.append(outer_circ_y, inner_circ_y),
+            ]
+        ).T
+        y = np.hstack([np.zeros(n_out, dtype=np.intp), np.ones(n_in, dtype=np.intp)])
+
+        noise_std = 0.1
+        X += noise_std * jr.normal(key, shape=X.shape)
+
+        return X.astype(float), y.astype(int)
+
+    def get_true_event(self, x: np.ndarray, t: float) -> np.ndarray:
+        return np.full(x.shape[0], np.nan)
+
+
+class Spiral(Data2D):
+    def get_x_and_y(self, key, n):
+        n_arms = 3
+        turns = 2
+        radius = 4.0
+        noise = 0.1
+
+        counts = [n // n_arms + (1 if i < n % n_arms else 0) for i in range(n_arms)]
+
+        X_list, y_list = [], []
+        for c, n_per_arms in enumerate(counts):
+            key_arm = jr.fold_in(key, c)
+            key_arm, subkey = jr.split(key_arm)
+            t = jr.uniform(subkey, shape=(n_per_arms,))
+            r = radius * t
+            theta = 2.0 * math.pi * turns * t + (2.0 * math.pi * c / n_arms)
+
+            key_arm, subkey = jr.split(key_arm)
+            x1 = r * np.cos(theta) + jr.normal(subkey, shape=(n_per_arms,)) * noise
+            key_arm, subkey = jr.split(key_arm)
+            x2 = r * np.sin(theta) + jr.normal(subkey, shape=(n_per_arms,)) * noise
+
+            X_list.append(np.c_[x1, x2])
+            y_list.append(np.full(n_per_arms, c, dtype=int))
+
+        X = np.vstack(X_list)
+        y = np.concatenate(y_list)
+
+        return X.astype(float), y.astype(int)
+
+    def get_true_event(self, x: np.ndarray, t: float) -> np.ndarray:
+        return np.full(x.shape[0], np.nan)
 
 
 # %%
-
-
-# def load_syn_linear_gaussian_regression(
-#     n,
-#     *,
-#     a=0.5,
-#     b=1.0,
-#     sigma=0.30,
-#     m=50,
-#     y_star=3.0,
-#     design="iid",  # "iid" | "gap" | "sparse_band"
-#     gap=(4.0, 6.0),  # x-region to thin/remove
-#     sparse_keep_prob=0.15,  # prob to keep a point inside gap
-#     oversample_factor=3,
-#     rng=np.random.default_rng(),
-# ):
-#     """
-#     Synthetic linear–Gaussian regression:
-#       Y = a X + b + eps,   eps ~ N(0, sigma^2)
-
-#     design:
-#       - "iid":         x ~ Uniform(0,10), as in original.
-#       - "gap":         no training points with x in (gap[0], gap[1]).
-#       - "sparse_band": training points in gap kept with prob << 1.
-
-#     Returns:
-#       X (n,1), y (n,), x_grid (m,1), true_curve (m,), title (str).
-#     """
-#     lo, hi = gap
-#     assert hi > lo, "gap must satisfy hi > lo"
-
-#     # Use seperate RNGs for x and y to ensure reproducibility
-#     rng_x, rng_y = rng.spawn(2)
-
-#     def _base_sample(rng, k):
-#         return rng.uniform(0.0, 10.0, k).astype(np.float32)
-
-#     if design == "iid":
-#         x = _base_sample(rng_x, n)
-
-#     elif design == "gap":
-#         xs = []
-#         need = n
-#         while need > 0:
-#             prop = _base_sample(rng_x, max(need * oversample_factor, need))
-#             keep = (prop <= lo) | (prop >= hi)
-#             kept = prop[keep]
-#             xs.append(kept[:need])
-#             need -= kept[:need].size
-#         x = np.concatenate(xs).astype(np.float32)
-
-#     elif design == "sparse_band":
-#         xs = []
-#         need = n
-#         p = float(sparse_keep_prob)
-#         while need > 0:
-#             # oversample because we will discard a bunch in the band
-#             prop = _base_sample(
-#                 rng_x, max(int(need / max(p, 1e-3)) * oversample_factor, need)
-#             )
-#             in_gap = (prop > lo) & (prop < hi)
-#             keep = (~in_gap) | (rng_x.rand(prop.size) < p)
-#             kept = prop[keep]
-#             xs.append(kept[:need])
-#             need -= kept[:need].size
-#         x = np.concatenate(xs).astype(np.float32)
-
-#     else:
-#         raise ValueError(f"Unknown design='{design}'")
-
-#     # response variable
-#     y = (a * x + b + rng_y.normal(0.0, sigma, x.size)).astype(np.float32)
-
-#     # grid + true curve: P(Y <= y_star | X=x) = Phi((y* - (a x + b))/sigma)
-#     x_grid = np.linspace(0.0, 10.0, m, dtype=np.float32)[:, None]
-#     true_curve = norm.cdf((y_star - (a * x_grid.ravel() + b)) / sigma).astype(
-#         np.float32
-#     )
-
-#     # label
-#     title_flavor = {
-#         "iid": "iid",
-#         "gap": f"gap {gap}",
-#         "sparse_band": f"sparse {gap}, p={sparse_keep_prob}",
-#     }
-#     title = f"Synthetic linear–Gaussian (y*={y_star}, {title_flavor[design]})"
-
-#     return x[:, None], y, x_grid, true_curve, title
-
-
-# def load_syn_mixture_probit(
-#     n,
-#     *,
-#     m=50,
-#     design="iid",  # "iid" | "gap" | "sparse_band"
-#     gap=(5.0, 7.0),  # region to thin/remove (lo, hi)
-#     sparse_keep_prob=0.15,  # used when design="sparse_band"
-#     oversample_factor=3,
-#     rng=np.random.default_rng(),
-# ):  # controls efficiency of thinning
-#     """
-#     Synthetic mixture–probit (binary):
-#       X ~ mixture of N(5,1) and N(9,1)  (base proposal)
-#       P(Y=1|X=x) = 0.7 Phi((x-5)/1) + 0.3 Phi((x-9)/1)
-
-#     design:
-#       - "iid":         no modification (original behavior).
-#       - "gap":         *no* training points with x in (gap[0], gap[1]).
-#       - "sparse_band": training points in gap are *thinned* with keep prob p<<1.
-
-#     Uses global numpy RNG state (seed it outside if you want reproducibility).
-#     Returns: X (n,1), y (n,), x_grid (m,1), true_curve (m,), title (str)
-#     """
-#     lo, hi = gap
-#     assert hi > lo, "gap must satisfy hi > lo"
-
-#     # Use seperate RNGs for x and y to ensure reproducibility
-#     rng_x, rng_y = rng.spawn(2)
-
-#     def _base_sample(rng, k):
-#         # proposal distribution for X: same as your original two-Gaussian mix
-#         k1 = k // 2
-#         k2 = k - k1
-#         x = np.concatenate([rng.normal(5.0, 1.0, k1), rng.normal(9.0, 1.0, k2)])
-#         # shuffle so stream isn't ordered by component
-#         perm = rng.permutation(k)
-#         return x[perm]
-
-#     if design == "iid":
-#         x = _base_sample(rng_x, n)
-
-#     elif design == "gap":
-#         # rejection sample: discard any x in (lo, hi) until we have n points
-#         xs = []
-#         need = n
-#         while need > 0:
-#             prop = _base_sample(rng_x, max(need * oversample_factor, need))
-#             keep = (prop <= lo) | (prop >= hi)
-#             kept = prop[keep]
-#             xs.append(kept[:need])
-#             need -= kept[:need].size
-#         x = np.concatenate(xs).astype(np.float32)
-
-#     elif design == "sparse_band":
-#         # thinning: keep everything outside gap; inside gap keep with prob p
-#         xs = []
-#         need = n
-#         p = float(sparse_keep_prob)
-#         while need > 0:
-#             prop = _base_sample(
-#                 rng_x, max(int(need / max(p, 1e-3)) * oversample_factor, need)
-#             )
-#             in_gap = (prop > lo) & (prop < hi)
-#             keep = (~in_gap) | (rng_x.rand(prop.size) < p)
-#             kept = prop[keep]
-#             xs.append(kept[:need])
-#             need -= kept[:need].size
-#         x = np.concatenate(xs).astype(np.float32)
-
-#     else:
-#         raise ValueError(
-#             f"Unknown design='{design}'. Use 'iid', 'gap', or 'sparse_band'."
-#         )
-
-#     # labels from the same mixture–probit as your original
-#     p = 0.7 * norm.cdf((x - 5.0) / 1.0) + 0.3 * norm.cdf((x - 9.0) / 1.0)
-#     y = (rng_y.random(x.size) < p).astype(np.int32)
-
-#     # grid + true curve (unchanged)
-#     x_grid = np.linspace(0.0, 12.0, m, dtype=np.float32)[:, None]
-#     true_curve = (
-#         0.7 * norm.cdf((x_grid.ravel() - 5.0) / 1.0)
-#         + 0.3 * norm.cdf((x_grid.ravel() - 9.0) / 1.0)
-#     ).astype(np.float32)
-
-#     # tidy shapes & title
-#     title_flavor = {
-#         "iid": "iid",
-#         "gap": f"gap {gap}",
-#         "sparse_band": f"sparse {gap}, p={sparse_keep_prob}",
-#     }
-#     title = f"Synthetic mixture-probit ({title_flavor[design]})"
-#     return x[:, None], y, x_grid, true_curve, title

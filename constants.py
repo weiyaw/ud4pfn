@@ -13,6 +13,8 @@ CLASSIFICATION = [
     "probit-mixture",
     "logistic-linear",
     "categorical-linear",
+    "two-moons",
+    "spiral",
 ]
 
 Y_STAR_MAP = {

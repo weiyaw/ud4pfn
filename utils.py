@@ -42,11 +42,12 @@ def camel_to_kebab(s: str) -> str:
     """Convert CamelCase or camelCase to kebab-case (lowercase with hyphens)."""
     if not s:
         return s
-    s1 = re.sub(r'(.)([A-Z][a-z]+)', r'\1-\2', s)
-    s2 = re.sub(r'([a-z0-9])([A-Z])', r'\1-\2', s1)
-    out = re.sub(r'[_\s]+', '-', s2)
-    out = re.sub(r'-{2,}', '-', out)
-    return out.strip('-').lower()
+    s1 = re.sub(r"(.)([A-Z][a-z]+)", r"\1-\2", s)
+    s2 = re.sub(r"([a-z0-9])([A-Z])", r"\1-\2", s1)
+    out = re.sub(r"[_\s]+", "-", s2)
+    out = re.sub(r"-{2,}", "-", out)
+    return out.strip("-").lower()
+
 
 def kebab_to_camel(s: str) -> str:
     parts = [p for p in s.replace("_", "-").split("-") if p]
@@ -72,3 +73,12 @@ def get_matching_dirs(directory: str, regex: str) -> list[str]:
     matching_dirs.sort()
     return matching_dirs
 
+
+def get_matching_files(directory: str, regex: str) -> list[str]:
+    matching_files = []
+    if os.path.exists(directory):
+        for entry in os.scandir(directory):
+            if entry.is_file() and re.search(regex, entry.name):
+                matching_files.append(entry.path)
+    matching_files.sort()
+    return matching_files

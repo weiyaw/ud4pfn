@@ -14,7 +14,7 @@ from timeit import default_timer as timer
 from omegaconf import DictConfig, OmegaConf
 import hydra
 
-import credible_set
+import posterior
 from pred_rule import TabPFNClassifierPPD, TabPFNRegressorPPD
 import data
 
@@ -72,7 +72,18 @@ def main(cfg: DictConfig):
 
     x_prev = setup.X
     y_prev = setup.y
-    x_grid = np.linspace(-10, 10, m).reshape(-1, 1)
+    d = x_prev.shape[1]
+    if d == 1:
+        x_grid = np.linspace(-10, 10, m).reshape(-1, 1)
+        grid_shape = (m,)
+    elif d == 2:
+        lin1 = np.linspace(-4, 4, m)
+        lin2 = np.linspace(-4, 4, m // 2)
+        x1, x2 = np.meshgrid(lin1, lin2, indexing='ij')
+        x_grid = np.stack([x1, x2], axis=-1).reshape(-1, 2)
+        grid_shape = (m, m // 2)
+    else:
+        raise ValueError(f"Unsupported dimension d={d}")
     t = np.array(T_MAP[setup_name])
 
     logging.info(f"Saving outputs to {savedir}")
@@ -81,6 +92,7 @@ def main(cfg: DictConfig):
     utils.write_to_local(f"{savedir}/setup.pickle", setup)
 
     # This is pure numpy array, so it's faster to load
+    true_prob = np.stack([setup.get_true_event(x_grid, st) for st in t])
     utils.write_to_local(
         f"{savedir}/data.pickle",
         {
@@ -88,22 +100,23 @@ def main(cfg: DictConfig):
             "y_prev": y_prev,
             "t": t,
             "x_grid": x_grid,
-            "true_prob": np.stack([setup.get_true_event(x_grid, st) for st in t]).shape,
+            "grid_shape": grid_shape,
+            "true_prob": true_prob,
         },
     )
 
     start = timer()
-    g0_to_gn = credible_set.compute_g0_to_gn(clf, t, x_grid, x_prev, y_prev)
+    g0_to_gn = posterior.compute_g0_to_gn(clf, t, x_grid, x_prev, y_prev)
     utils.write_to_local(f"{savedir}/g0_to_gn.pickle", g0_to_gn)
     logging.info(f"Built g0_to_gn in {timer() - start:.2f} seconds")
 
     start = timer()
-    gn = credible_set.compute_gn(clf, t, x_grid, x_prev, y_prev)
+    gn = posterior.compute_gn(clf, t, x_grid, x_prev, y_prev)
     utils.write_to_local(f"{savedir}/gn.pickle", gn)
     logging.info(f"Built gn in {timer() - start:.2f} seconds")
 
     start = timer()
-    gn_plus_1 = credible_set.sample_gn_plus_1(
+    gn_plus_1 = posterior.sample_gn_plus_1(
         key_others, clf, t, x_grid, x_prev, y_prev, size=mc_samples
     )
     utils.write_to_local(f"{savedir}/gn_plus_1.pickle", gn_plus_1)
@@ -113,3 +126,5 @@ def main(cfg: DictConfig):
 if __name__ == "__main__":
     OmegaConf.register_new_resolver("githash", utils.githash)
     main()
+
+# %%

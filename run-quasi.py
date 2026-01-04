@@ -18,16 +18,18 @@ import data
 
 from constants import REGRESSION, CLASSIFICATION, T_MAP
 from pred_rule import TabPFNClassifierPPD, TabPFNRegressorPPD, assert_ppd_args_shape
+from posterior import compute_gn, sample_gn_plus_1
 
 os.environ["TABPFN_DISABLE_TELEMETRY"] = "1"
 
 
 def inner_mc_delta(key, clf, t, x_new, x_prev, y_prev, m_inner):
     """
-    Monte Carlo estimate of | E_n[Δ_{n+1}] | for the event A = {y=t} or {y <= t}, depending on clf.
-    Here Δ_{n+1} = P_{n+1} - P_n with P_n = P( A | x_new, x_prev, y_prev).
+    Compute | E_n[Δ_{n+1}] | for the event A = {y=t} or {y <= t}, depending on
+    clf. Here Δ_{n+1} = P_{n+1} - P_n with P_n = P( A | x_new, x_prev, y_prev).
 
-    This is similar to calling compute_gn and sample_gn_plus_1, except that x_new is always used for growing x.
+    This is similar to calling compute_gn and sample_gn_plus_1, except that
+    x_new is always used for growing x.
 
     Parameters
     ----------
@@ -47,7 +49,8 @@ def inner_mc_delta(key, clf, t, x_new, x_prev, y_prev, m_inner):
     Return:
     -------
     (p, m) array
-        Monte Carlo estimate of | E_n[Δ_{n+1}] | for the event A = {y=t} or {y <= t}, depending on clf.
+        A Monte Carlo estimate of | E_n[Δ_{n+1}] | for the event A = {y=t} or {y
+        <= t}, depending on clf.
     """
     P_n = clf.predict_event(t, x_new, x_prev, y_prev)  # (p, m)
     key, subkey = jr.split(key)
@@ -110,10 +113,10 @@ def run_single_outer_path(key, clf, t, x_new, x_init, y_init, k_samp, m_inner):
     Return:
     -------
     (p, K) array
-        Monte Carlo estimate of | E[Δ_{k+1} | x_init, y_init, x_k, y_k] | for
+        A single sample of | E[Δ_{k+1} | x_init, y_init, x_k, y_k] | for
         the event A = {y=t} or {y <= t}, depending on clf.
     """
-    delta_path = []
+    bias_path = []
     prev_k = 0
     key_path, key_eval = jr.split(key)
     assert_ppd_args_shape(x_new, x_init, y_init)
@@ -134,12 +137,12 @@ def run_single_outer_path(key, clf, t, x_new, x_init, y_init, k_samp, m_inner):
         delta_k = inner_mc_delta(
             subkey, clf, t, x_new, x_prev, y_prev, m_inner
         )  # (p, 1)
-        delta_path.append(delta_k)
+        bias_path.append(delta_k)
         prev_k = k
 
-    delta_path = np.concatenate(delta_path, axis=1)  # (p, K)
-    assert delta_path.shape == (t.shape[0], len(k_samp))
-    return delta_path
+    bias_path = np.concatenate(bias_path, axis=1)  # (p, K)
+    assert bias_path.shape == (t.shape[0], len(k_samp))
+    return bias_path
 
 
 @hydra.main(version_base=None, config_path="conf", config_name="quasi")
@@ -222,12 +225,12 @@ def main(cfg: DictConfig):
     else:
         logging.info(f"Fresh run for {tag}.")
         start = timer()
-        delta_path = run_single_outer_path(
+        bias_path = run_single_outer_path(
             loopkey_outer, clf, t, x_new, x_prev, y_prev, k_points, m_inner
         )
 
-        assert delta_path.shape == (t.shape[0], k_points.size)
-        utils.write_to(save_path, {"delta": delta_path, "k": k_points, "t": t})
+        assert bias_path.shape == (t.shape[0], k_points.size)
+        utils.write_to(save_path, {"bias": bias_path, "k": k_points, "t": t})
         logging.info(f"Built {tag} in {timer() - start:.2f} seconds")
 
 
