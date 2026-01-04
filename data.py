@@ -175,7 +175,7 @@ class GaussianPolynomial(Data):
     def get_y(self, key, x):
         # linear function plus constant Gaussian noise
         mean, noise_std = self._param(x)
-        y = mean + jr.normal(key, shape=x.shape) * noise_std
+        y = mean + jr.normal(key, shape=mean.shape) * noise_std
         return np.array(y).astype(np.float32)
 
     def get_true_event(self, x: np.ndarray, t: float) -> np.ndarray:
