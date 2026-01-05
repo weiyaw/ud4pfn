@@ -182,7 +182,7 @@ def main(cfg: DictConfig):
     y_prev = setup.y
 
     # Query covariate: 0.0 for 1D/2D (center of domain)
-    x_new = np.zeros((1, x_prev.shape[1]))
+    x_new = np.full((1, x_prev.shape[1]), cfg.x_new, dtype=float)
     t = np.array(T_MAP[setup_name])
 
     savedir = Path(hydra.core.hydra_config.HydraConfig.get().runtime.output_dir)
