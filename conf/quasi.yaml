@@ -3,14 +3,14 @@ defaults:
 
 setup: "logistic-linear"
 x_design: "uniform-1d"
+x_rollout: "dirac-0"
 shuffle_data: True
 
-x_new: 0
 n_estimators: 1
 n0: 25
-n_horizon: 1000
+rollout_depth: 1000
 outer_idx: 0
-m_inner: 100
+mc_inner: 100
 seed: 999
 
 id: ${now:%Y-%m-%d}
@@ -19,7 +19,7 @@ git: ${githash:}
 
 hydra:
   run:
-    dir: "./outputs/${id}/quasi setup=${setup} x_design=${x_design} x_new=${x_new} n_est=${n_estimators} n0=${n0} seed=${seed}"
+    dir: "./outputs/${id}/quasi setup=${setup} x_design=${x_design} x_rollout=${x_rollout} n_est=${n_estimators} n0=${n0} seed=${seed}"
   sweep:
     dir: ${hydra.run.dir}
     subdir: .

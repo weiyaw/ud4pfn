@@ -31,7 +31,7 @@ class Data1D(Data):
         self.key = key
         self.x_design = x_design
         key_x, key_y, key_shuffle = jr.split(key, 3)
-        self.X = self.get_x(key_x, n, x_design)
+        self.X = np.asarray(self.get_x(key_x, n, x_design))
         # get y from subclass and compute true_curve separately via get_true_curve
         self.y = self.get_y(key_y, self.X)
 
@@ -40,7 +40,7 @@ class Data1D(Data):
             self.X = self.X[perm]
             self.y = self.y[perm]
 
-    def get_x(self, key: jax.random.key, n: int, x_design: str) -> np.ndarray:
+    def get_x(self, key: jax.random.key, n: int, x_design: str) -> jax.Array:
         # uniform between -10 and 10. no data in the gaps
         if x_design == "one-gap":
             key1, key2 = jr.split(key)
@@ -59,7 +59,7 @@ class Data1D(Data):
             raise ValueError(f"Unknown design='{x_design}'")
         if xs.ndim == 1:
             xs = xs[:, None]
-        return np.array(xs)
+        return xs
 
     @abstractmethod
     def get_y(self, key: jax.random.key, x: np.ndarray) -> np.ndarray:
