@@ -153,7 +153,7 @@ def run_single_outer_path(
         # rollout to length k by repeatedly appending (x_new, y_new) to x_prev
         # and y_prev
         start = timer()
-        for j in trange(prev_k, k, desc=f"Rollout {prev_k}-{k}", leave=False):
+        for j in trange(prev_k, k, desc=f"rollout {prev_k}-{k}", leave=False):
             loopkey = jr.fold_in(key_path, j)
             loopkey, subkey_x, subkey_y = jr.split(loopkey, 3)
             x_curr = sample_x(subkey_x, 1, x_prev)
@@ -161,7 +161,9 @@ def run_single_outer_path(
             assert y_curr.size == 1
             x_prev = np.vstack([x_prev, x_curr])
             y_prev = np.append(y_prev, y_curr)
-        logging.info(f"Rollout {prev_k}-{k} takes {timer() - start:.2f} seconds")
+        logging.info(
+            f"rollout {prev_k}-{k} (avg): {(timer() - start) / (k - prev_k):.2f} secs"
+        )
 
         bias_save_path = save_path / f"bias-{k}.pickle"
         if os.path.exists(bias_save_path):
@@ -177,7 +179,7 @@ def run_single_outer_path(
             utils.write_to(
                 bias_save_path, {"bias": bias_k, "x_new": x_new, "t": t, "k": k}
             )
-            logging.info(f"bias-{k} takes {timer() - start:.2f} seconds")
+            logging.info(f"bias-{k}: {timer() - start:.2f} secs")
         prev_k = k
 
 
@@ -271,6 +273,7 @@ def main(cfg: DictConfig):
 
     loopkey_outer = jr.fold_in(key_outer, outer_idx)
     save_path = savedir / f"outer-{outer_idx}"
+    start = timer()
     run_single_outer_path(
         loopkey_outer,
         clf,
@@ -283,6 +286,7 @@ def main(cfg: DictConfig):
         mc_inner,
         save_path,
     )
+    logging.info(f"outer-{outer_idx}: {timer() - start:.2f} secs")
 
 
 if __name__ == "__main__":
