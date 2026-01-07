@@ -31,7 +31,7 @@ def inner_mc_delta(key, clf, sample_x, t, x_new, x_prev, y_prev, mc_inner):
     clf. Here Δ_{n+1} = P_{n+1} - P_n with P_n = P( A | x_new, x_prev, y_prev).
 
     This is similar to calling compute_gn and sample_gn_plus_1, except that
-    x_new is always used for growing x.
+    sample_x is used for growing x.
 
     Parameters
     ----------
@@ -62,6 +62,7 @@ def inner_mc_delta(key, clf, sample_x, t, x_new, x_prev, y_prev, mc_inner):
     P_n = clf.predict_event(t, x_new, x_prev, y_prev)  # (p, m)
     key, subkey = jr.split(key)
     x_curr = sample_x(subkey, mc_inner, x_prev)  # (mc_inner, d)
+    key, subkey = jr.split(key)
     y_curr, _ = clf.sample(subkey, x_curr, x_prev, y_prev, size=1)  # (1, mc_inner, )
     assert x_curr.shape[0] == y_curr.shape[1] == mc_inner
 
