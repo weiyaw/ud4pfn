@@ -1,4 +1,3 @@
-
 from pred_rule import TabPFNClassifierPPD, TabPFNRegressorPPD, assert_ppd_args_shape
 import warnings
 from typing import Callable
@@ -109,42 +108,35 @@ def compute_g0_to_gn(clf, t, x_grid, x_prev, y_prev):
 
 
 def compute_un(gn, gn_plus_1, n, type="simultaneous"):
-    # the red one
+    # Asymptotic CLT, Sec 4.3
     assert gn_plus_1.ndim == 2, "gn_plus_1 must be 2D array (mc_samples, m)"
     assert gn.ndim == 1, "gn must be 1D array (m,)"
     assert gn_plus_1.shape[1] == gn.shape[0], "gn_plus_1 and gn shape mismatch"
 
-    diff = gn_plus_1 - gn  # (mc_samples, m)
+    ndiff = n * (gn_plus_1 - gn)  # (mc_samples, m)
     if type == "pointwise":
-        # return shape
-        return np.mean(((n + 1) * diff) ** 2, axis=0)  # (m,)
+        return np.mean(ndiff**2, axis=0)  # (m,)
     elif type == "simultaneous":
-        outer = np.einsum("ij,ik->ijk", diff, diff)
-        return np.mean((n + 1) ** 2 * outer, axis=0)  # (m, m)
+        outer = np.einsum("ij,ik->ijk", ndiff, ndiff)
+        return np.mean(outer, axis=0)  # (m, m)
 
 
 def compute_vn(g0_to_gn, type="simultaneous"):
-    # the original
+    # Asymptotic CLT, Sec 4.3, but starting from k = 2
     assert g0_to_gn.ndim == 2, "g0_to_gn must be 2D array (n+1, m)"
 
     n = g0_to_gn.shape[0] - 1
-    delta = g0_to_gn[2:, :] - g0_to_gn[1:-1, :]  # (n-1, m)
+    diff = g0_to_gn[2:, :] - g0_to_gn[1:-1, :]  # (n-1, m)
     k = np.arange(2, n + 1)  # (n-1,)
+    kdiff = k[:, None] * diff  # (n-1, m)
 
     if type == "pointwise":
         # v_n(x_j) = (1/(n-1)) * sum k^2 * Δ_k(x_j)^2
-        return np.mean((k[:, None] * delta) ** 2, axis=0)
+        return np.mean(kdiff**2, axis=0) # (m, )
     elif type == "simultaneous":
         # v_n(x) = (1/(n-1)) * sum k^2 * Δ_k(x) Δ_k(x)^T
-        outer = np.einsum("ij,ik->ijk", delta, delta)  # (n-1, m, m)
-        return np.mean(k[:, None, None] ** 2 * outer, axis=0)  # (m, m)
-
-
-
-
-
-
-
+        outer = np.einsum("ij,ik->ijk", kdiff, kdiff)  # (n-1, m, m)
+        return np.mean(outer, axis=0)  # (m, m)
 
 
 # def build_g_hat_logreg(clf, X, y, x_grid):

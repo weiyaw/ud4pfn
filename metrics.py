@@ -1,4 +1,5 @@
 import numpy as np
+import jax
 import jax.numpy as jnp
 import jax.random as jr
 from jax.scipy.stats import norm
@@ -32,8 +33,10 @@ def compute_simultaneous_coverage(true_curve, bands):
     return np.mean(is_covered)
 
 
+@jax.jit
 def build_pointwise_band(mean, cov, alpha: float = 0.05):
-    se = np.sqrt(cov)
+    assert cov.ndim == 1
+    se = jnp.sqrt(cov)
     z = norm.ppf(1 - alpha / 2)
     # lower = np.clip(mean - z * se, 0.0, 1.0)
     # upper = np.clip(mean + z * se, 0.0, 1.0)
@@ -43,10 +46,11 @@ def build_pointwise_band(mean, cov, alpha: float = 0.05):
     return {"mean": mean, "lower": lower, "upper": upper, "se": se, "width": width}
 
 
+@jax.jit
 def build_simultaneous_band(mean, cov, alpha: float = 0.05):
     # See Algorithm 1 of https://doi.org/10.1002/jae.2656
-    se = np.sqrt(np.diag(cov))
-
+    assert cov.ndim == 2
+    se = jnp.sqrt(jnp.diag(cov))
     key = jr.key(501938)
     draws = jr.multivariate_normal(key, jnp.zeros_like(mean), cov, shape=(1000,))
 
@@ -115,7 +119,7 @@ def match_gaussian_beta_moments(mu, sigma2, eps=1e-7):
     Moment matching for a Beta distribution to a Gaussian distribution. It
     returns the parameters (a, b) of the Beta distribution. If mu and sigma2 are
     arrays, their shapes must be the same and the function performs elementwise
-    moment matching. 
+    moment matching.
 
     Parameters
     ----------
@@ -149,8 +153,8 @@ def compute_beta_entropy(a, b):
     """
     Computes element-wise entropy of the Beta distribution E_{g~Beta(a,b)}[h(g)]
     in closed form:
-    
-        - a/(a+b) ψ(a+1) - b/(a+b) ψ(b+1) + ψ(a+b+1). 
+
+        - a/(a+b) ψ(a+1) - b/(a+b) ψ(b+1) + ψ(a+b+1).
 
     Parameters
     ----------
