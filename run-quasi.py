@@ -55,8 +55,9 @@ def inner_mc_delta(key, clf, sample_x, t, x_new, x_prev, y_prev, mc_inner):
 
     Return:
     -------
-    (p, m) array
-        A Monte Carlo estimate of | E_n[Δ_{n+1}] | for the event A = {y=t} or {y
+    (mc_inner, p, m) array
+        Samples of Δ_{n+1}. Taking the mean along the 0th-axis will give a
+        Monte Carlo estimate of | E_n[Δ_{n+1}] | for the event A = {y=t} or {y
         <= t}, depending on clf.
     """
     P_n = clf.predict_event(t, x_new, x_prev, y_prev)  # (p, m)
@@ -73,22 +74,7 @@ def inner_mc_delta(key, clf, sample_x, t, x_new, x_prev, y_prev, mc_inner):
         P_n_plus_1 = clf.predict_event(t, x_new, x_plus_1, y_plus_1)  # (p, m)
         deltas.append(P_n_plus_1 - P_n)
 
-    return abs(np.mean(deltas, axis=0))  # (p, m)
-
-
-def inner_mc_delta2(key, clf, t, x_new, x_prev, y_prev, m_inner):
-    """
-    Monte Carlo estimate of | E_n[Δ_{n+1}] | for the event A = {y=t} or {y <=
-    t}, depending on clf. Here Δ_{n+1} = P_{n+1} - P_n with P_n = P( A | x_new,
-    x_prev, y_prev).
-
-    This version use Bayesian bootstrap to draw future x_plus_1.
-    """
-    P_n = compute_gn(clf, t, x_new, x_prev, y_prev)  # (p, m)
-    P_n_plus_1 = sample_gn_plus_1(
-        key, clf, t, x_new, x_prev, y_prev, m_inner
-    )  # (mc_samples, p, m)
-    return abs(np.mean(P_n_plus_1 - P_n, axis=0))
+    return np.stack(deltas, axis=0)  # (mc_inner, p, m)
 
 
 @jax.jit(static_argnames=["n"])
@@ -140,9 +126,9 @@ def run_single_outer_path(
 
     Return:
     -------
-    For each k, it saves the computed bias = | E[Δ_{k+1} | x_init, y_init, x_k,
-    y_k]| in {save_path}/bias-{k}.pickle as a dictionary with keys "bias", "t",
-    and "k". It skips the computation if the file already exists.
+    For each k, it saves the samples of Δ_{k+1} | x_init, y_init, x_k, y_k in
+    {save_path}/delta-{k}.pickle as a dictionary with keys "delta", "x_new",
+    "t", and "k". It skips the computation if the file already exists.
     """
     key_path, key_eval = jr.split(key)
     assert_ppd_args_shape(x_new, x_init, y_init)
@@ -165,23 +151,23 @@ def run_single_outer_path(
         logging.info(
             f"rollout {prev_k}-{k} (avg): {(timer() - start) / (k - prev_k):.2f} secs"
         )
+        prev_k = k
 
-        bias_save_path = save_path / f"bias-{k}.pickle"
-        if os.path.exists(bias_save_path):
-            logging.info(f"bias-{k} exists")
+        delta_path = save_path / f"delta-{k}.pickle"
+        if os.path.exists(delta_path):
+            logging.info(f"delta-{k} exists")
         else:
             # compute | E[Δ_{k+1} \mid x_init, y_init, x_k, y_k] |
             start = timer()
             subkey = jr.fold_in(key_eval, k)
-            bias_k = inner_mc_delta(
+            deltas_k = inner_mc_delta(
                 subkey, clf, sample_x, t, x_new, x_prev, y_prev, mc_inner
-            )  # (p, m)
-            assert bias_k.shape == (t.shape[0], x_new.shape[0])  # (p, m)
+            )  # (mc_inner, p, m)
+            assert deltas_k.shape == (mc_inner, t.shape[0], x_new.shape[0])
             utils.write_to(
-                bias_save_path, {"bias": bias_k, "x_new": x_new, "t": t, "k": k}
+                delta_path, {"delta": deltas_k, "x_new": x_new, "t": t, "k": k}
             )
-            logging.info(f"bias-{k}: {timer() - start:.2f} secs")
-        prev_k = k
+            logging.info(f"delta-{k}: {timer() - start:.2f} secs")
 
 
 @hydra.main(version_base=None, config_path="conf", config_name="quasi")
