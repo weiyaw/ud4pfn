@@ -55,6 +55,9 @@ class Data1D(Data):
             xs = jnp.concatenate([xs1, xs2, xs3])
         elif x_design == "uniform-1d":
             xs = jr.uniform(key, shape=(n,), minval=-10, maxval=10)
+        elif x_design.startswith("uniform:"):
+            minval, maxval = x_design.split(":")[1:]
+            xs = jr.uniform(key, shape=(n,), minval=float(minval), maxval=float(maxval))
         else:
             raise ValueError(f"Unknown design='{x_design}'")
         if xs.ndim == 1:

@@ -2,7 +2,7 @@ defaults:
   - _self_
 
 setup: "logistic-linear"
-x_design: "uniform-1d"
+x_design: "uniform:-10:10"
 x_rollout: "dirac-0"
 shuffle_data: True
 

@@ -208,7 +208,11 @@ def main(cfg: DictConfig):
     y_prev = setup.y
 
     # x_new is a grid
-    x_new = np.linspace(-10, 10, 11).reshape(-1, 1)
+    if x_design.startswith("uniform:"):
+        minval, maxval = x_design.split(":")[1:]
+        x_new = np.linspace(float(minval), float(maxval), 11).reshape(-1, 1)
+    else:
+        x_new = np.linspace(-10, 10, 11).reshape(-1, 1)
     t = np.array(T_MAP[setup_name])
     assert x_new.ndim == 2 and t.ndim == 1
 
