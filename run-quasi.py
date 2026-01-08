@@ -177,8 +177,9 @@ def main(cfg: DictConfig):
     logging.info(OmegaConf.to_yaml(cfg))
 
     n_estimators = int(cfg.n_estimators)
-    n = int(cfg.n0)
-    rollout_depth = int(cfg.rollout_depth)
+    n0 = int(cfg.n0)
+    n_grid_size = int(cfg.n_grid_size)
+    n_horizon = int(cfg.n_horizon)
     outer_idx = int(cfg.outer_idx)
     mc_inner = int(cfg.mc_inner)
     seed = int(cfg.seed)
@@ -200,7 +201,7 @@ def main(cfg: DictConfig):
     # convert setup (kebab-case) to Camalcase and ensure PPD suffix
     try:
         Setup = getattr(data, utils.kebab_to_camel(setup_name))
-        setup = Setup(key_setup, n, shuffle_data, x_design)
+        setup = Setup(key_setup, n0, shuffle_data, x_design)
     except AttributeError:
         raise ValueError(f"Data {setup_name} not found in data module")
 
@@ -252,13 +253,17 @@ def main(cfg: DictConfig):
     # ------------------------------------------------------------
     # 3.  Run A Single Outer Path (Quasi-Martingale Check)
     # ------------------------------------------------------------
-    # Run one outer path (indexed by outer_idx). We simulate adding data points
-    # (up to rollout_depth) and compute the bias term.
+    # Run one outer path (indexed by outer_idx). We rollout until the largest
+    # value of k_points and compute the bias term along the way.
 
-    # 15 points on the linear scale, 15 points on the log10 scale
-    k_points_lin = np.linspace(0, rollout_depth, 21, dtype=int)
-    k_points_log = np.rint(np.geomspace(1, rollout_depth, 21)).astype(int)
-    k_points = np.unique(np.concatenate([k_points_lin, k_points_log]))
+    # 30 points on the linear scale, 30 points on the geom scale
+    n_start = n0 + 100
+    n_end = n0 + n_horizon
+    n_points_lin = np.rint(np.linspace(n_start, n_end, n_grid_size)).astype(int)
+    n_points_geom = np.rint(np.geomspace(n_start, n_end, n_grid_size)).astype(int)
+    n_points = np.unique(np.concatenate([n_points_lin, n_points_geom]))
+    k_points = n_points - n0 - 1
+    logging.info(f"n_points: {n_points.tolist()}")
     logging.info(f"k_points: {k_points.tolist()}")
     logging.info(f"Number of k_points: {len(k_points)}")
 
