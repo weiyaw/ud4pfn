@@ -134,12 +134,12 @@ def compute_Fn_Qn(clf, x_rollout, y_rollout, x_new, t, u, n_points, save_path):
     assert x_rollout.shape[0] == y_rollout.shape[0]
     assert x_rollout.shape[0] >= max(n_points)
 
+    start = timer()
     for n in n_points:
         F_n_path = save_path / f"FnQn-{n}.pickle"
         if os.path.exists(F_n_path):
             logging.info(f"FnQn-{n} exists")
         else:
-            start = timer()
             x_prev, y_prev = x_rollout[:n], y_rollout[:n]
             F_n = clf.cdf(t, x_new, x_prev, y_prev)  # (p, m)
             Q_n = clf.icdf(u, x_new, x_prev, y_prev)  # (q, m)
@@ -148,7 +148,7 @@ def compute_Fn_Qn(clf, x_rollout, y_rollout, x_new, t, u, n_points, save_path):
                 F_n_path,
                 {"F_n": F_n, "Q_n": Q_n, "x_new": x_new, "t": t, "u": u, "n": n},
             )
-            logging.info(f"FnQn-{n}: {timer() - start:.2f} secs")
+    logging.info(f"FnQn: {timer() - start:.2f} secs")
 
 
 @hydra.main(version_base=None, config_path="conf", config_name="cid")
