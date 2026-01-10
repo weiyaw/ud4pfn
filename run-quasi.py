@@ -25,13 +25,16 @@ from posterior import compute_gn, sample_gn_plus_1
 os.environ["TABPFN_DISABLE_TELEMETRY"] = "1"
 
 
-def inner_mc_delta(key, clf, sample_x, t, x_new, x_prev, y_prev, mc_inner):
+def sample_delta(key, clf, sample_x, t, x_new, x_prev, y_prev, size):
     """
-    Compute | E_n[Δ_{n+1}] | for the event A = {y=t} or {y <= t}, depending on
-    clf. Here Δ_{n+1} = P_{n+1} - P_n with P_n = P( A | x_new, x_prev, y_prev).
+    Sample Δ_n(x_new, t) given x_{1:n-1}, y_{1:n-1} for the event A = {y=t} or A
+    = {y <= t} which depends on clf. Here, Δ_n(x_new, t) = P_n(x_new, t) -
+    P_{n-1}(x_new, t) with P_n(x_new, t) = P( A | x_new, x_{1:n}, y_{1:n}) and
+    P_{n-1}(x_new, t) = P( A | x_new, x_{1:n-1}, y_{1:n-1}).
 
-    This is similar to calling compute_gn and sample_gn_plus_1, except that
-    sample_x is used for growing x.
+    This quantity is random because of the randomness in x_n and y_n. The
+    distribution of x_n is defined in sample_x, and y_n | x_n the TabPFN given
+    by clf.
 
     Parameters
     ----------
@@ -47,34 +50,33 @@ def inner_mc_delta(key, clf, sample_x, t, x_new, x_prev, y_prev, mc_inner):
     x_new : (m, d) array
         Query covariates.
     x_prev : (n, d) array
-        Historical covariates.
+        Historical covariates x_{1:n-1}
     y_prev : (n,) array
-        Historical targets.
-    mc_inner : int
+        Historical targets y_{1:n-1}.
+    size : int
         Number of Monte Carlo samples for the inner Monte Carlo estimate.
 
     Return:
     -------
-    (mc_inner, p, m) array
-        Samples of Δ_{n+1}. Taking the mean along the 0th-axis will give a
-        Monte Carlo estimate of | E_n[Δ_{n+1}] | for the event A = {y=t} or {y
-        <= t}, depending on clf.
+    (size, p, m) array
+        Samples of Δ_n(x_new, t). Taking the mean along the 0th-axis will give a
+        Monte Carlo estimate of E_n[Δ_n(x_new, t)].
     """
     P_n = clf.predict_event(t, x_new, x_prev, y_prev)  # (p, m)
     key, subkey = jr.split(key)
-    x_curr = sample_x(subkey, mc_inner, x_prev)  # (mc_inner, d)
+    x_curr = sample_x(subkey, size, x_prev)  # x_n: (size, d)
     key, subkey = jr.split(key)
-    y_curr, _ = clf.sample(subkey, x_curr, x_prev, y_prev, size=1)  # (1, mc_inner, )
-    assert x_curr.shape[0] == y_curr.shape[1] == mc_inner
+    y_curr, _ = clf.sample(subkey, x_curr, x_prev, y_prev, size=1)  # y_n: (1, size)
+    assert x_curr.shape[0] == y_curr.shape[1] == size
 
     deltas = []
-    for i in trange(mc_inner, desc="inner MC", leave=False):
-        x_plus_1 = np.vstack([x_prev, x_curr[i]])
-        y_plus_1 = np.append(y_prev, y_curr[0, i])
+    for i in trange(size, desc="inner MC", leave=False):
+        x_plus_1 = np.vstack([x_prev, x_curr[i]])  # x_{1:n}
+        y_plus_1 = np.append(y_prev, y_curr[0, i])  # y_{1:n}
         P_n_plus_1 = clf.predict_event(t, x_new, x_plus_1, y_plus_1)  # (p, m)
         deltas.append(P_n_plus_1 - P_n)
 
-    return np.stack(deltas, axis=0)  # (mc_inner, p, m)
+    return np.stack(deltas, axis=0)  # (size, p, m)
 
 
 @jax.jit(static_argnames=["n"])
@@ -90,15 +92,18 @@ def sample_x_truth(key, n, x_prev, get_x, x_design):
 
 
 def run_single_outer_path(
-    key, clf, sample_x, t, x_new, x_init, y_init, k_points, mc_inner, save_path
+    key, clf, sample_x, t, x_new, x_init, y_init, n_points, mc_delta, save_path
 ):
     """
-    Draw a single sample from the random variable | E[Δ_{k+1} | x_init, y_init,
-    x_k, y_k]|, where the randomness of this random variable is coming from
-    simulating x_k and y_k. Here Δ_{k+1} = P_{k+1} - P_k with P_k = P( A |
-    x_init, y_init, x_k, y_k). The event A = {y=t} or {y <= t}, depends on clf.
+    Sample from Δ_n(x_new, t) along the rollout trajectory where Δ_n(x_new, t) =
+    P_n(x_new, t) - P_{n-1}(x_new, t) with P_n(x_new, t) = P( A | x_new,
+    x_{1:n}, y_{1:n}) and P_{n-1}(x_new, t) = P( A | x_new, x_{1:n-1},
+    y_{1:n-1}).
 
-    Currently, all x_k are set to x_new.
+    The function will start the rollout with some initial dataset x_init and
+    y_init, then rollout up to max(n_points) - 1. After the rollout, the
+    function will will sample from Δ_n(x_new, t) at all the n specified in
+    n_points.
 
     Parameters
     ----------
@@ -117,57 +122,63 @@ def run_single_outer_path(
         Initial dataset.
     y_init : (n,) array
         Initial dataset.
-    k_points : list of int of length K
+    n_points : list of int of length K
         List of rollout depth the outer path.
-    mc_inner : int
+    mc_delta : int
         Number of samples for the inner Monte Carlo estimate.
     save_path : Path
         Path to save the computed bias.
 
-    Return:
+    Returns
     -------
-    For each k, it saves the samples of Δ_{k+1} | x_init, y_init, x_k, y_k in
-    {save_path}/delta-{k}.pickle as a dictionary with keys "delta", "x_new",
-    "t", and "k". It skips the computation if the file already exists.
+    For each n, it saves the samples of Δ_n | x_{1:n-1}, y_{1:n-1} in
+    {save_path}/delta-{n}.pickle as a dictionary with keys "delta", "x_new",
+    "t", and "n". It skips the computation if the file already exists.
     """
+
     key_path, key_eval = jr.split(key)
     assert_ppd_args_shape(x_new, x_init, y_init)
 
-    prev_k = 0
-    x_prev = x_init
-    y_prev = y_init
-    for k in k_points:
-        # rollout to length k by repeatedly appending (x_new, y_new) to x_prev
-        # and y_prev
+    n0 = x_init.shape[0]
+    rollout_depth = max(n_points) - 1 - n0
+    assert rollout_depth >= n0
+    rollout_path = save_path / "rollout.pickle"
+    if os.path.exists(rollout_path):
+        logging.info("rollout exists")
+        rollout = utils.read_from(rollout_path)
+        x_rollout = rollout["x"]
+        y_rollout = rollout["y"]
+    else:
         start = timer()
-        for j in trange(prev_k, k, desc=f"rollout {prev_k}-{k}", leave=False):
-            loopkey = jr.fold_in(key_path, j)
+        x_rollout = np.vstack([x_init, np.zeros((rollout_depth, x_init.shape[1]))])
+        y_rollout = np.append(y_init, np.zeros((rollout_depth,)))
+        for i in trange(n0, rollout_depth + n0, desc="rollout", leave=False):
+            loopkey = jr.fold_in(key_path, i)
             loopkey, subkey_x, subkey_y = jr.split(loopkey, 3)
-            x_curr = sample_x(subkey_x, 1, x_prev)
-            y_curr, _ = clf.sample(subkey_y, x_curr, x_prev, y_prev)
-            assert y_curr.size == 1
-            x_prev = np.vstack([x_prev, x_curr])
-            y_prev = np.append(y_prev, y_curr)
-        logging.info(
-            f"rollout {prev_k}-{k} (avg): {(timer() - start) / (k - prev_k):.2f} secs"
-        )
-        prev_k = k
+            x_curr = sample_x(subkey_x, 1, x_rollout[:i])
+            y_curr, _ = clf.sample(subkey_y, x_curr, x_rollout[:i], y_rollout[:i])
+            x_rollout[i] = x_curr
+            y_rollout[i] = y_curr.squeeze()
+        assert x_rollout.shape[0] == y_rollout.shape[0] == rollout_depth + n0
+        utils.write_to(rollout_path, {"x": x_rollout, "y": y_rollout})
+        logging.info(f"rollout: {timer() - start:.2f} secs")
 
-        delta_path = save_path / f"delta-{k}.pickle"
+    for n in n_points:
+        delta_path = save_path / f"delta-{n}.pickle"
         if os.path.exists(delta_path):
-            logging.info(f"delta-{k} exists")
+            logging.info(f"delta-{n} exists")
         else:
-            # compute | E[Δ_{k+1} \mid x_init, y_init, x_k, y_k] |
             start = timer()
-            subkey = jr.fold_in(key_eval, k)
-            deltas_k = inner_mc_delta(
-                subkey, clf, sample_x, t, x_new, x_prev, y_prev, mc_inner
-            )  # (mc_inner, p, m)
-            assert deltas_k.shape == (mc_inner, t.shape[0], x_new.shape[0])
-            utils.write_to(
-                delta_path, {"delta": deltas_k, "x_new": x_new, "t": t, "k": k}
+            subkey = jr.fold_in(key_eval, n)
+            x_prev, y_prev = x_rollout[: n - 1], y_rollout[: n - 1]
+            deltas_n = sample_delta(
+                subkey, clf, sample_x, t, x_new, x_prev, y_prev, mc_delta
             )
-            logging.info(f"delta-{k}: {timer() - start:.2f} secs")
+            assert deltas_n.shape == (mc_delta, t.shape[0], x_new.shape[0])
+            utils.write_to(
+                delta_path, {"delta": deltas_n, "x_new": x_new, "t": t, "n": n}
+            )
+            logging.info(f"delta-{n}: {timer() - start:.2f} secs")
 
 
 @hydra.main(version_base=None, config_path="conf", config_name="quasi")
@@ -181,7 +192,7 @@ def main(cfg: DictConfig):
     n_grid_size = int(cfg.n_grid_size)
     n_horizon = int(cfg.n_horizon)
     outer_idx = int(cfg.outer_idx)
-    mc_inner = int(cfg.mc_inner)
+    mc_delta = int(cfg.mc_delta)
     seed = int(cfg.seed)
     setup_name = cfg.setup
     x_design = cfg.x_design
@@ -262,24 +273,22 @@ def main(cfg: DictConfig):
     n_points_lin = np.rint(np.linspace(n_start, n_end, n_grid_size)).astype(int)
     n_points_geom = np.rint(np.geomspace(n_start, n_end, n_grid_size)).astype(int)
     n_points = np.unique(np.concatenate([n_points_lin, n_points_geom]))
-    k_points = n_points - n0 - 1
     logging.info(f"n_points: {n_points.tolist()}")
-    logging.info(f"k_points: {k_points.tolist()}")
-    logging.info(f"Number of k_points: {len(k_points)}")
+    logging.info(f"Number of n_points: {len(n_points)}")
 
-    loopkey_outer = jr.fold_in(key_outer, outer_idx)
+    key_outer = jr.fold_in(key_outer, outer_idx)
     save_path = savedir / f"outer-{outer_idx}"
     start = timer()
     run_single_outer_path(
-        loopkey_outer,
+        key_outer,
         clf,
         sample_x,
         t,
         x_new,
         x_prev,
         y_prev,
-        k_points,
-        mc_inner,
+        n_points,
+        mc_delta,
         save_path,
     )
     logging.info(f"outer-{outer_idx}: {timer() - start:.2f} secs")

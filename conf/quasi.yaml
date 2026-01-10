@@ -11,7 +11,7 @@ n0: 25
 n_grid_size: 30
 n_horizon: 1000
 outer_idx: 0
-mc_inner: 100
+mc_delta: 100
 seed: 999
 
 id: ${now:%Y-%m-%d}
