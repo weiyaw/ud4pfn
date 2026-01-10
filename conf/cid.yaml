@@ -1,0 +1,21 @@
+defaults:
+  - _self_
+
+n_estimators: 1
+outer_idx: 0
+n_grid_size: 101
+n_horizon: 1000
+x_rollout: "truth"
+seed: 999
+
+id: ${now:%Y-%m-%d}
+lastrun: ${now:%Y-%m-%dT%H:%M:%S%z}
+git: ${githash:}
+
+hydra:
+  run:
+    dir: "./outputs/${id}/cid x_rollout=${x_rollout} n_est=${n_estimators} seed=${seed}"
+  sweep:
+    dir: ${hydra.run.dir}
+    subdir: .
+

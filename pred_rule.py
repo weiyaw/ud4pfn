@@ -1,4 +1,3 @@
-
 from tabpfn import TabPFNClassifier, TabPFNRegressor
 import numpy as np
 import torch
@@ -66,28 +65,89 @@ class TabPFNRegressorPPD(TabPFNRegressor):
             pred_output = self.predict(x_new, output_type="full")
         bardist = pred_output["criterion"]
         logits = pred_output["logits"]
-        y_new = [
-            self.bardist_sample(jr.fold_in(key, i), bardist.icdf, logits)
-            for i in range(size)
-        ]
-        y_new = np.stack(y_new, axis=0)  # (n, num_x_new)
+        assert logits.ndim == 2, "logits must be 2D array (num_data, num_of_bins)"
 
+        y_new = []
+        for i in range(size):
+            all_u = jr.uniform(jr.fold_in(key, i), shape=(logits.shape[0],))
+            y_new.append(
+                np.array(
+                    [bardist.icdf(l, float(u)).cpu() for l, u in zip(logits, all_u)]
+                )
+            )
+
+        y_new = np.stack(y_new, axis=0)  # (size, num_x_new)
         return y_new, {"bardist": bardist, "logits": logits.cpu().numpy()}
 
-    def bardist_sample(
-        self, key: jr.key, bardist_icdf: Callable, logits: torch.Tensor
+    def icdf(
+        self, u: np.ndarray, x_new: np.ndarray, x_prev: np.ndarray, y_prev: np.ndarray
     ) -> np.ndarray:
-        """Samples values from the bar distribution. A modified version of
-        https://github.com/PriorLabs/TabPFN/blob/1b786570f5d5da3f3b9b6179c3fa43faf0c77894/src/tabpfn/architectures/base/bar_distribution.py#L581
-        Temperature t.
         """
-        assert logits.ndim == 2, "logits must be 2D array (num_data, num_of_bins)"
-        p_cdf = jr.uniform(key, shape=(logits.shape[0],))
-        return np.array(
-            [bardist_icdf(logits[i, :], p).cpu() for i, p in enumerate(p_cdf.tolist())]
-        )
+        Return inverse CDF of P(Y <= t | X = x_new, x_prev, y_prev) given a
+        value u between [0, 1].
+
+        Parameters
+        ----------
+        u : (p, ) array
+            Values between [0, 1].
+        x_new : (m, d) array
+            Query covariates.
+        x_prev : (n, d) array
+            Historical covariates.
+        y_prev : (n,) array
+            Historical targets.
+
+        Return:
+        -------
+        np.ndarray
+            Inverse CDF values. Each row corresponds to a value of u, and each
+            column corresponds to a value of x_new. Shape: (p, m)
+        """
+        assert_ppd_args_shape(x_new, x_prev, y_prev)
+        self.fit(x_prev, y_prev)
+        with warnings.catch_warnings():
+            warnings.filterwarnings(
+                "ignore",
+                message="overflow encountered in cast",
+                category=RuntimeWarning,
+            )
+            pred_output = self.predict(x_new, output_type="full")
+        bardist = pred_output["criterion"]
+        logits = pred_output["logits"]  # (m, num_of_bins)
+
+        all_u = np.atleast_1d(u)
+        assert all_u.ndim == 1, "u must be 1D array"
+
+        # For each u, compute for all x_new
+        results = [[bardist.icdf(l, float(u)).cpu() for l in logits] for u in all_u]
+        return np.array(results)
 
     def predict_event(
+        self, t: np.ndarray, x_new: np.ndarray, x_prev: np.ndarray, y_prev: np.ndarray
+    ) -> np.ndarray:
+        """
+        Return P(Y <= t | X = x_new, x_prev, y_prev).
+
+        Parameters
+        ----------
+        t : (p, ) array
+            Events of the PPD.
+        x_new : (m, d) array
+            Query covariates.
+        x_prev : (n, d) array
+            Historical covariates.
+        y_prev : (n,) array
+            Historical targets.
+
+        Return:
+        -------
+        np.ndarray
+            P(Y <= t | X = x_new, prev data). Each row corresponds to a value of t, and each column corresponds to a value of x_new.
+            Shape: (p, m)
+        """
+        return self.cdf(t, x_new, x_prev, y_prev)
+
+    def cdf(
         self,
         t: np.ndarray,
         x_new: np.ndarray,
@@ -257,5 +317,6 @@ class BayesianBootstrapPPD:
 
     def predict_event(self, t: np.ndarray, x_new: np.ndarray) -> np.ndarray:
         pass
+
 
 # %%
