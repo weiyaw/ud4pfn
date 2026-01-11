@@ -7,7 +7,7 @@ import jax.numpy as jnp
 import jax.random as jr
 from scipy.stats import norm, poisson, gamma
 from dataclasses import dataclass
-from typing import Union
+import pandas as pd
 
 
 @dataclass
@@ -566,6 +566,41 @@ class Spiral(Data2D):
 
     def get_true_event(self, x: np.ndarray, t: float) -> np.ndarray:
         return np.full(x.shape[0], np.nan)
+
+
+@dataclass
+class RealData:
+    X: np.ndarray
+    y: np.ndarray
+
+    def __repr__(self) -> str:
+        return f"{self.__class__.__name__}(X=np.ndarray{self.X.shape}, y=np.ndarray{self.y.shape})"
+
+
+class LabourForce(RealData):
+    def __init__(self, shuffle: bool):
+        import statsmodels.api as sm
+        df = sm.datasets.get_rdataset("Mroz", "carData").data
+        self.y = df.lfp.map({"no": 0, "yes": 1}).to_numpy(int)
+        self.X = df[["inc"]].to_numpy(float)
+        if shuffle:
+            perm = jr.permutation(jr.key(7251), self.X.shape[0])
+            self.X = self.X[perm]
+            self.y = self.y[perm]
+
+
+class FibreStrength(RealData):
+    def __init__(self, shuffle: bool):
+        df = pd.read_csv("./fibre_strength.csv")
+        s_thresh = 1.5  # MPa
+        x_name = "length_mm"
+        self.X = df[[x_name]].to_numpy(float)  # (n, 1)
+        # 1{S > 1.5}
+        self.y = (df["strength_mpa"] > s_thresh).to_numpy(int)
+        if shuffle:
+            perm = jr.permutation(jr.key(3753), self.X.shape[0])
+            self.X = self.X[perm]
+            self.y = self.y[perm]
 
 
 # %%

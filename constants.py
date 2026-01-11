@@ -15,6 +15,8 @@ CLASSIFICATION = [
     "categorical-linear",
     "two-moons",
     "spiral",
+    "fibre-strength",
+    "labour-force",
 ]
 
 Y_STAR_MAP = {

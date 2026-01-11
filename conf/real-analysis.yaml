@@ -1,0 +1,28 @@
+defaults:
+  - _self_
+
+setup: "gaussian-linear"
+x_grid_size: 100
+shuffle_data: True
+seed: 999
+
+n_estimators: 64
+mc_samples: 1000                # num of monte carlo samples in u_{n+1} estimator
+
+
+id: ${now:%Y-%m-%d}
+lastrun: ${now:%Y-%m-%dT%H:%M:%S%z}
+git: ${githash:}
+
+hydra:
+  run:
+    dir: "./outputs/${id}/\
+      setup=${setup}
+      shuffle=${shuffle_data}
+      n_est=${n_estimators}
+      m=${x_grid_size}
+      seed=${seed}"
+
+  sweep:
+    dir: ${hydra.run.dir}
+    subdir: .

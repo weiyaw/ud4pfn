@@ -6,4 +6,5 @@ scipy
 pandas
 scikit-learn
 hydra-core
-loguru
+statsmodels
+
