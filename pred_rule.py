@@ -257,8 +257,8 @@ class TabPFNClassifierPPD(TabPFNClassifier):
         y_new = jax.vmap(sample_classes)(keys, probs_new).T  # (n, num_x_new)
 
         return y_new, {"probs": probs_new}
-
-    def predict_event(
+    
+    def pmf(
         self,
         t: np.ndarray,
         x_new: np.ndarray,
@@ -301,6 +301,34 @@ class TabPFNClassifierPPD(TabPFNClassifier):
 
         event_prob = jax.vmap(predict_event_single_t)(t)
         return np.array(event_prob)
+
+    def predict_event(
+        self,
+        t: np.ndarray,
+        x_new: np.ndarray,
+        x_prev: np.ndarray,
+        y_prev: np.ndarray,
+    ) -> np.ndarray:
+        """Return P(Y = t | X = x_new, prev data).
+
+        Parameters
+        ----------
+        t: (p, ) array
+            Event of the PPD.
+        x_new : (m, d) array
+            Query covariates.
+        x_prev : (n, d) array
+            Historical covariates.
+        y_prev : (n,) array
+            Historical targets.
+
+        Return:
+        -------
+        np.ndarray
+            P(Y = t | X = x_new, prev data). Each row corresponds to a value of t, and each column corresponds to a value of x_new.
+            Shape: (p, m)
+        """
+        return self.pmf(t, x_new, x_prev, y_prev)
 
 
 class BayesianBootstrapPPD:

@@ -1,0 +1,20 @@
+defaults:
+  - _self_
+
+n_estimators: 1
+n0: 25
+n_grid_size: 100
+n_horizon: 1000
+outer_idx: 0
+seed: 999
+
+id: ${now:%Y-%m-%d}
+lastrun: ${now:%Y-%m-%dT%H:%M:%S%z}
+git: ${githash:}
+
+hydra:
+  run:
+    dir: "./outputs/${id}/quasi-simple n_est=${n_estimators} n0=${n0} seed=${seed}"
+  sweep:
+    dir: ${hydra.run.dir}
+    subdir: .
