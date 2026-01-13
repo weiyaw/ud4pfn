@@ -41,7 +41,6 @@ class Data1D(Data):
             self.y = self.y[perm]
 
     def get_x(self, key: jax.random.key, n: int, x_design: str) -> jax.Array:
-        # uniform between -10 and 10. no data in the gaps
         if x_design == "one-gap":
             key1, key2 = jr.split(key)
             xs1 = jr.uniform(key1, shape=(n // 2,), minval=-8, maxval=-2)
@@ -54,10 +53,15 @@ class Data1D(Data):
             xs3 = jr.uniform(k3, shape=(n - 2 * (n // 3)), minval=6, maxval=10)
             xs = jnp.concatenate([xs1, xs2, xs3])
         elif x_design == "uniform-1d":
+            # uniform between -10 and 10. no data in the gaps
             xs = jr.uniform(key, shape=(n,), minval=-10, maxval=10)
         elif x_design.startswith("uniform:"):
+            # uniform between minval and maxval
             minval, maxval = x_design.split(":")[1:]
             xs = jr.uniform(key, shape=(n,), minval=float(minval), maxval=float(maxval))
+        elif x_design.startswith("gaussian:"):
+            mean, std = x_design.split(":")[1:]
+            xs = float(mean) + float(std) * jr.normal(key, shape=(n,))
         else:
             raise ValueError(f"Unknown design='{x_design}'")
         if xs.ndim == 1:
@@ -377,13 +381,13 @@ class Gamma(Data1D):
 
 
 class LogisticLinear(Data1D):
-    # good t = 1
+    # same dgp as Jayasekera et al 2025
 
     def _params(self, x: np.ndarray) -> np.ndarray:
-        # P(Y=1|X) = sigmoid(a*x + b)
+        # P(Y=1|X) = sigmoid(0.25*x - 0.5)
         assert x.ndim == 2 and x.shape[1] == 1
-        a = 0.2
-        b = -0.4
+        a = 0.25
+        b = -0.5
         logits = a * x + b
         p = 1.0 / (1.0 + np.exp(-logits))
         p = p.astype(np.float32).squeeze(-1)
@@ -507,28 +511,40 @@ class GaussianLinearSusan(Data2D):
         return cdf.astype(float)
 
 
-class TwoMoons(Data2D):
+def make_moons(key, n, noise_std):
+    # this is adapted from scikit-learn's make_moons
+    n_out = n // 2
+    n_in = n - n_out
+
+    outer_circ_x = np.cos(np.linspace(0, np.pi, n_out))
+    outer_circ_y = np.sin(np.linspace(0, np.pi, n_out))
+    inner_circ_x = 1 - np.cos(np.linspace(0, np.pi, n_in))
+    inner_circ_y = 1 - np.sin(np.linspace(0, np.pi, n_in)) - 0.5
+
+    X = np.vstack(
+        [
+            np.append(outer_circ_x, inner_circ_x),
+            np.append(outer_circ_y, inner_circ_y),
+        ]
+    ).T
+    y = np.hstack([np.zeros(n_out, dtype=np.intp), np.ones(n_in, dtype=np.intp)])
+
+    X += noise_std * jr.normal(key, shape=X.shape)
+
+    return X.astype(float), y.astype(int)
+
+
+class TwoMoons1(Data2D):
     def get_x_and_y(self, key, n):
-        n_out = n // 2
-        n_in = n - n_out
+        return make_moons(key, n, noise_std=0.1)
 
-        outer_circ_x = np.cos(np.linspace(0, np.pi, n_out))
-        outer_circ_y = np.sin(np.linspace(0, np.pi, n_out))
-        inner_circ_x = 1 - np.cos(np.linspace(0, np.pi, n_in))
-        inner_circ_y = 1 - np.sin(np.linspace(0, np.pi, n_in)) - 0.5
+    def get_true_event(self, x: np.ndarray, t: float) -> np.ndarray:
+        return np.full(x.shape[0], np.nan)
 
-        X = np.vstack(
-            [
-                np.append(outer_circ_x, inner_circ_x),
-                np.append(outer_circ_y, inner_circ_y),
-            ]
-        ).T
-        y = np.hstack([np.zeros(n_out, dtype=np.intp), np.ones(n_in, dtype=np.intp)])
 
-        noise_std = 0.1
-        X += noise_std * jr.normal(key, shape=X.shape)
-
-        return X.astype(float), y.astype(int)
+class TwoMoons2(Data2D):
+    def get_x_and_y(self, key, n):
+        return make_moons(key, n, noise_std=0.4)
 
     def get_true_event(self, x: np.ndarray, t: float) -> np.ndarray:
         return np.full(x.shape[0], np.nan)
@@ -580,6 +596,7 @@ class RealData:
 class LabourForce(RealData):
     def __init__(self, shuffle: bool):
         import statsmodels.api as sm
+
         df = sm.datasets.get_rdataset("Mroz", "carData").data
         self.y = df.lfp.map({"no": 0, "yes": 1}).to_numpy(int)
         self.X = df[["inc"]].to_numpy(float)

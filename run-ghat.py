@@ -74,14 +74,27 @@ def main(cfg: DictConfig):
     y_prev = setup.y
     d = x_prev.shape[1]
     if d == 1:
-        x_grid = np.linspace(-10, 10, m).reshape(-1, 1)
-        grid_shape = (m,)
+        if isinstance(setup, data.LogisticLinear):
+            # same as Jayasekera et al 2025
+            x_grid = np.linspace(-15.0, 15.0, 151).reshape(-1, 1)
+        else:
+            x_grid = np.linspace(-10, 10, m).reshape(-1, 1)
+        grid_shape = (x_grid.shape[0],)
     elif d == 2:
-        lin1 = np.linspace(-4, 4, m)
-        lin2 = np.linspace(-4, 4, m // 2)
+        if isinstance(setup, data.TwoMoons1):
+            # same as Jayasekera et al 2025
+            lin1 = np.arange(-1.5, 2.6, 0.2)
+            lin2 = np.arange(-1.5, 2.6, 0.2)
+        elif isinstance(setup, data.TwoMoons2):
+            # same as Jayasekera et al 2025
+            lin1 = np.arange(-3.0, 3.6, 0.2)
+            lin2 = np.arange(-2.5, 3.1, 0.2)
+        else:
+            lin1 = np.arange(-4.0, 4.0, m)
+            lin2 = np.arange(-4.0, 4.0, m)
         x1, x2 = np.meshgrid(lin1, lin2, indexing='ij')
         x_grid = np.stack([x1, x2], axis=-1).reshape(-1, 2)
-        grid_shape = (m, m // 2)
+        grid_shape = (len(lin1), len(lin2))
     else:
         raise ValueError(f"Unsupported dimension d={d}")
     t = np.array(T_MAP[setup_name])
