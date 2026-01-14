@@ -123,16 +123,16 @@ def match_gaussian_beta_moments(mu, sigma2, eps=1e-7):
 
     Parameters
     ----------
-    mu: (p, m) array
+    mu: ndarray
         Mean of the Gaussian distribution.
-    sigma2: (p, m) array
+    sigma2: ndarray
         Variance of the Gaussian distribution.
     eps: float
         Epsilon for numerical stability.
 
     Returns
     -------
-    (p, m) array
+    ndarray
         Moment matching for Beta distribution(a, b).
     """
     assert mu.shape == sigma2.shape
@@ -158,14 +158,14 @@ def compute_beta_entropy(a, b):
 
     Parameters
     ----------
-    a: (p, m) array
+    a: ndarray
         Parameters of the Beta distribution.
-    b: (p, m) array
+    b: ndarray
         Parameters of the Beta distribution.
 
     Returns
     -------
-    (p, m) array
+    ndarray
         Entropy of the Beta distribution.
     """
     ab = a + b
@@ -178,14 +178,14 @@ def compute_aleatoric_entropy(gn, sigma2):
 
     Parameters
     ----------
-    gn: (p, m) array
+    gn: ndarray
         Events of the PPD.
-    sigma2: (p, m) array
+    sigma2: ndarray
         Variance of the PPD.
 
     Returns
     -------
-    (p, m) array
+    ndarray
         Aleatoric entropy.
     """
     a, b = match_gaussian_beta_moments(gn, sigma2)
@@ -198,14 +198,14 @@ def compute_total_entropy(gn, eps=1e-7):
 
     Parameters
     ----------
-    gn: (p, m) array
+    gn: ndarray
         Events of the PPD.
     eps: float
         Epsilon for numerical stability.
 
     Returns
     -------
-    (p, m) array
+    ndarray
         Total entropy.
     """
 

@@ -83,15 +83,15 @@ def main(cfg: DictConfig):
     elif d == 2:
         if isinstance(setup, data.TwoMoons1):
             # same as Jayasekera et al 2025
-            lin1 = np.arange(-1.5, 2.6, 0.2)
-            lin2 = np.arange(-1.5, 2.6, 0.2)
+            lin1 = np.linspace(-1.5, 2.6, m)
+            lin2 = np.linspace(-1.5, 2.6, m)
         elif isinstance(setup, data.TwoMoons2):
             # same as Jayasekera et al 2025
-            lin1 = np.arange(-3.0, 3.6, 0.2)
-            lin2 = np.arange(-2.5, 3.1, 0.2)
+            lin1 = np.linspace(-3.0, 3.6, m)
+            lin2 = np.linspace(-2.5, 3.1, m)
         else:
-            lin1 = np.arange(-4.0, 4.0, m)
-            lin2 = np.arange(-4.0, 4.0, m)
+            lin1 = np.linspace(-4.0, 4.0, m)
+            lin2 = np.linspace(-4.0, 4.0, m)
         x1, x2 = np.meshgrid(lin1, lin2, indexing='ij')
         x_grid = np.stack([x1, x2], axis=-1).reshape(-1, 2)
         grid_shape = (len(lin1), len(lin2))
