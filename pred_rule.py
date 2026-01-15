@@ -257,7 +257,7 @@ class TabPFNClassifierPPD(TabPFNClassifier):
         y_new = jax.vmap(sample_classes)(keys, probs_new).T  # (n, num_x_new)
 
         return y_new, {"probs": probs_new}
-    
+
     def pmf(
         self,
         t: np.ndarray,
@@ -284,23 +284,34 @@ class TabPFNClassifierPPD(TabPFNClassifier):
             P(Y = t | X = x_new, prev data). Each row corresponds to a value of t, and each column corresponds to a value of x_new.
             Shape: (p, m)
         """
+
         assert_ppd_args_shape(x_new, x_prev, y_prev)
         self.fit(x_prev, y_prev)
-        probs = self.predict_proba(x_new)  # shape: (m, num_classes)
+
+        # Use logits for higher precision
+        logits = self.predict_logits(x_new)  # shape: (m, num_classes)
+
+        # Convert to float64 for precision
+        logits = logits.astype(np.float64)
+
+        # Compute softmax in float64
+        max_logits = np.max(logits, axis=1, keepdims=True)
+        exp_logits = np.exp(logits - max_logits)
+        probs = exp_logits / np.sum(exp_logits, axis=1, keepdims=True)
 
         # t must be a 1D integer array
         t = np.atleast_1d(t)
         assert t.ndim == 1 and t.dtype == int
 
-        def predict_event_single_t(single_t: int) -> jax.Array:
+        def predict_event_single_t(single_t: int) -> np.ndarray:
             # Create a mask for the class: (num_classes,)
             matches = self.classes_ == single_t
             # Dot product selects the column or results in 0 if no match
             # probs: (m, num_classes), matches: (num_classes,) -> (m,)
-            return jnp.dot(probs, matches)
+            return np.dot(probs, matches.astype(np.float64))
 
-        event_prob = jax.vmap(predict_event_single_t)(t)
-        return np.array(event_prob)
+        event_prob = np.array([predict_event_single_t(ti) for ti in t])
+        return event_prob
 
     def predict_event(
         self,

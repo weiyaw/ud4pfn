@@ -42,6 +42,10 @@ def main(cfg: DictConfig):
     key = jr.key(1907 + seed)
     key_others, key_setup = jr.split(key)
 
+    if cfg.fix_data:
+        # keep the random number generator fixed if required
+        key_setup = jr.key(6683)
+
     # convert setup (kebab-case) to Camalcase and ensure PPD suffix
     try:
         Setup = getattr(data, utils.kebab_to_camel(setup_name))

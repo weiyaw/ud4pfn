@@ -6,6 +6,7 @@ data_size: 100
 x_grid_size: 100
 x_design: "one-gap"
 shuffle_data: True
+fix_data: False # if True, using a different seed will not change the generated data
 seed: 999
 
 n_estimators: 64
