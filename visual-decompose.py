@@ -3,10 +3,11 @@ import numpy as np
 from timeit import default_timer as timer
 import utils
 from metrics import (
-    compute_total_entropy,
-    compute_aleatoric_entropy,
+    compute_total_entropy_binary,
+    compute_aleatoric_entropy_binary,
+    compute_total_entropy_multiclass,
+    compute_aleatoric_entropy_multiclass,
 )
-import metrics
 from posterior import compute_vn, compute_un
 
 import matplotlib.pyplot as plt
@@ -41,20 +42,20 @@ for n, ax in zip(n_list, axes.flatten()):
     g0_to_gn = utils.read_from(f"{outdir}/g0_to_gn.pickle")[:, t_idx]
     true_prob = data["true_prob"][t_idx]
 
-    clt_cov = compute_vn(g0_to_gn, type="pointwise") / y_prev.size
-    total_entropy = compute_total_entropy(gn)
-    assert total_entropy.shape == clt_cov.shape == gn.shape
-    aleatoric_entropy = compute_aleatoric_entropy(gn, clt_cov)
+    clt_var = compute_vn(g0_to_gn, type="pointwise") / y_prev.size
+    total_entropy = compute_total_entropy_binary(gn)
+    assert total_entropy.shape == clt_var.shape == gn.shape
+    alea_entropy = compute_aleatoric_entropy_binary(gn, clt_var)
 
     ax.plot(x_grid.squeeze(), total_entropy, label="Total Uncertainty")
-    ax.plot(x_grid.squeeze(), aleatoric_entropy, label="Aleatoric Uncertainty")
+    ax.plot(x_grid.squeeze(), alea_entropy, label="Aleatoric Uncertainty")
     ax.vlines(
         x_prev[y_prev == 0], 0, 1, "m", alpha=0.4, linestyle="--", label="Data (y=0)"
     )
     ax.vlines(
         x_prev[y_prev == 1], 0, 1, "c", alpha=0.4, linestyle="--", label="Data (y=1)"
     )
-    ax.set_ylim(min(aleatoric_entropy) * 0.98, max(total_entropy) * 1.02)
+    ax.set_ylim(min(alea_entropy) * 0.98, max(total_entropy) * 1.02)
     ax.set_xlabel("Test covariate $x^*$")
     ax.set_ylabel("Uncertainty")
     ax.set_title(f"n={n}")
@@ -70,12 +71,12 @@ t_idx = 1
 x_grid_idx = [0, 25, 50, 75, 100, 125, 150]
 
 total_entropy_all = []
-aleatoric_entropy_all = []
+alea_entropy_all = []
 for n in n_list:
     outdir = utils.get_matching_dirs(id_dir, rf"logistic-linear.+n={n} .+")
     assert len(outdir) == 10
     total_entropy_seeds = []
-    aleatoric_entropy_seeds = []
+    alea_entropy_seeds = []
     for d in outdir:
         data = utils.read_from(f"{d}/data.pickle")
         x_grid = data["x_grid"]
@@ -84,32 +85,32 @@ for n in n_list:
         true_prob = data["true_prob"][t_idx]
 
         clt_cov = compute_vn(g0_to_gn, type="pointwise") / n
-        total_entropy = compute_total_entropy(gn)
+        total_entropy = compute_total_entropy_binary(gn)
         assert total_entropy.shape == clt_cov.shape == gn.shape
-        aleatoric_entropy = compute_aleatoric_entropy(gn, clt_cov)
+        alea_entropy = compute_aleatoric_entropy_binary(gn, clt_cov)
         total_entropy_seeds.append(total_entropy)
-        aleatoric_entropy_seeds.append(aleatoric_entropy)
+        alea_entropy_seeds.append(alea_entropy)
     total_entropy_all.append(np.stack(total_entropy_seeds))
-    aleatoric_entropy_all.append(np.stack(aleatoric_entropy_seeds))
+    alea_entropy_all.append(np.stack(alea_entropy_seeds))
 total_entropy_all = np.stack(total_entropy_all)  # (n, rep, x_grid)
-aleatoric_entropy_all = np.stack(aleatoric_entropy_all)  # (n, rep, x_grid)
+alea_entropy_all = np.stack(alea_entropy_all)  # (n, rep, x_grid)
 
 total_entropy_avg = np.mean(total_entropy_all, axis=1)  # (n, x_grid)
-aleatoric_entropy_avg = np.mean(aleatoric_entropy_all, axis=1)  # (n, x_grid)
-epistemic_entropy_avg = total_entropy_avg - aleatoric_entropy_avg
+alea_entropy_avg = np.mean(alea_entropy_all, axis=1)  # (n, x_grid)
+epis_entropy_avg = total_entropy_avg - alea_entropy_avg
 
 fig, axes = plt.subplots(1, 2, figsize=(12, 4), constrained_layout=True)
 
 for i, x in enumerate(data["x_grid"][x_grid_idx]):
     total_entropy = total_entropy_avg[..., i]
-    aleatoric_entropy = aleatoric_entropy_avg[..., i]
-    epistemic_entropy = total_entropy - aleatoric_entropy
+    alea_entropy = alea_entropy_avg[..., i]
+    epis_entropy = total_entropy - alea_entropy
     if x.item() > -1 and x.item() < 6:
-        axes[0].plot(n_list, epistemic_entropy, label=f"x={x.item()}")
-        axes[1].plot(n_list, aleatoric_entropy, label=f"x={x.item()}")
+        axes[0].plot(n_list, epis_entropy, label=f"x={x.item()}")
+        axes[1].plot(n_list, alea_entropy, label=f"x={x.item()}")
     else:
-        axes[0].plot(n_list, epistemic_entropy, "--", label=f"x={x.item()}")
-        axes[1].plot(n_list, aleatoric_entropy, "--", label=f"x={x.item()}")
+        axes[0].plot(n_list, epis_entropy, "--", label=f"x={x.item()}")
+        axes[1].plot(n_list, alea_entropy, "--", label=f"x={x.item()}")
 axes[0].legend(loc="upper right", ncol=2, fontsize=12)
 axes[0].set_ylabel("Entropy", fontsize=16)
 axes[0].set_xlabel("Sample Size/Context Length", fontsize=16)
@@ -148,11 +149,11 @@ for j, (setup_regex, title) in enumerate(setup_regex_list):
     g0_to_gn = utils.read_from(f"{outdir}/g0_to_gn.pickle")[:, t_idx]
     true_prob = data["true_prob"][t_idx]
 
-    clt_cov = compute_vn(g0_to_gn, type="pointwise") / n
-    total_entropy = compute_total_entropy(gn)
-    aleatoric_entropy = metrics.compute_aleatoric_entropy(gn, clt_cov)
-    assert total_entropy.shape == clt_cov.shape == gn.shape == aleatoric_entropy.shape
-    epistemic_entropy = total_entropy - aleatoric_entropy
+    clt_var = compute_vn(g0_to_gn, type="pointwise") / n
+    total_entropy = compute_total_entropy_binary(gn)
+    alea_entropy = compute_aleatoric_entropy_binary(gn, clt_var)
+    assert total_entropy.shape == clt_var.shape == gn.shape == alea_entropy.shape
+    epis_entropy = total_entropy - alea_entropy
 
     # Plot
     X = x_grid[:, 0].reshape(*grid_shape)
@@ -184,9 +185,9 @@ for j, (setup_regex, title) in enumerate(setup_regex_list):
     axes[1, j].set_title(f"$v_n / n$ ({title})")
     plot_heatmap(axes[2, j], X, Y, total_entropy.reshape(*grid_shape))
     axes[2, j].set_title(f"Total Uncertainty ({title})")
-    plot_heatmap(axes[3, j], X, Y, aleatoric_entropy.reshape(*grid_shape))
+    plot_heatmap(axes[3, j], X, Y, alea_entropy.reshape(*grid_shape))
     axes[3, j].set_title(f"Aleatoric Uncertainty ({title})")
-    plot_heatmap(axes[4, j], X, Y, epistemic_entropy.reshape(*grid_shape))
+    plot_heatmap(axes[4, j], X, Y, epis_entropy.reshape(*grid_shape))
     axes[4, j].set_title(f"Epistemic Uncertainty ({title})")
     axes[0, j].legend(loc="upper right")
 
@@ -208,19 +209,24 @@ y_prev = data["y_prev"]
 x_grid = data["x_grid"]
 grid_shape = data["grid_shape"]
 n = y_prev.size
+K = np.unique(y_prev).size # number of classes
 
-t_idx = 1
-t = data["t"][t_idx]
+t = data["t"]
 grid_shape = data["grid_shape"]
-gn = utils.read_from(f"{outdir}/gn.pickle")[t_idx]
-g0_to_gn = utils.read_from(f"{outdir}/g0_to_gn.pickle")[:, t_idx]
-true_prob = data["true_prob"][t_idx]
+gn = utils.read_from(f"{outdir}/gn.pickle") # (K - 1, m)
+gn = np.concatenate([gn, 1 - gn.sum(axis=0, keepdims=True)], axis=0) # (K, m)
+g0_to_gn = utils.read_from(f"{outdir}/g0_to_gn.pickle") # (n+1, K - 1, m)
+g0_to_gn = np.concatenate([g0_to_gn, 1 - g0_to_gn.sum(axis=1, keepdims=True)], axis=1) # (n+1, K, m)
+true_prob = data["true_prob"]
 
-clt_cov = compute_vn(g0_to_gn, type="pointwise") / n
-total_entropy = compute_total_entropy(gn)
-aleatoric_entropy = metrics.compute_aleatoric_entropy(gn, clt_cov)
-assert total_entropy.shape == clt_cov.shape == gn.shape == aleatoric_entropy.shape
-epistemic_entropy = total_entropy - aleatoric_entropy
+clt_var = [compute_vn(g0_to_gn[:, k], type="pointwise") / n for k in range(K)]
+clt_var = np.array(clt_var) # (K, m)
+assert gn.shape == clt_var.shape
+assert gn.shape[0] == K
+total_entropy = compute_total_entropy_multiclass(gn) # (m,)
+alea_entropy = compute_aleatoric_entropy_multiclass(gn, clt_var) # (m,)
+assert total_entropy.shape == alea_entropy.shape
+epis_entropy = total_entropy - alea_entropy # (m,)
 
 # Plot
 X = x_grid[:, 0].reshape(*grid_shape)
@@ -250,9 +256,9 @@ def plot_heatmap(ax, X, Y, Z):
 
 plot_heatmap(axes[0], X, Y, total_entropy.reshape(*grid_shape))
 axes[0].set_title(f"Total Uncertainty")
-plot_heatmap(axes[1], X, Y, aleatoric_entropy.reshape(*grid_shape))
+plot_heatmap(axes[1], X, Y, alea_entropy.reshape(*grid_shape))
 axes[1].set_title(f"Aleatoric Uncertainty")
-plot_heatmap(axes[2], X, Y, epistemic_entropy.reshape(*grid_shape))
+plot_heatmap(axes[2], X, Y, epis_entropy.reshape(*grid_shape))
 axes[2].set_title(f"Epistemic Uncertainty")
 axes[0].legend(loc="upper right")
 

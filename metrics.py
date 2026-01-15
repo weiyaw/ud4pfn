@@ -114,7 +114,7 @@ def build_ellipsoid_band(mean, cov, alpha: float = 0.05):
     }
 
 
-def match_gaussian_beta_moments(mu, sigma2, eps=1e-7):
+def match_gaussian_beta_moments(mu, sigma2, eps=1e-12):
     """
     Moment matching for a Beta distribution to a Gaussian distribution. It
     returns the parameters (a, b) of the Beta distribution. If mu and sigma2 are
@@ -149,65 +149,185 @@ def match_gaussian_beta_moments(mu, sigma2, eps=1e-7):
     return a, b
 
 
-def compute_beta_entropy(a, b):
+def compute_aleatoric_entropy_binary(gn, sigma2):
     """
-    Computes element-wise entropy of the Beta distribution E_{g~Beta(a,b)}[h(g)]
-    in closed form:
+    Computes element-wise aleatoric entropy, which is the expected entropy
+    E_{g~Beta(a,b)}[h(g)] in closed form:
 
         - a/(a+b) ψ(a+1) - b/(a+b) ψ(b+1) + ψ(a+b+1).
 
     Parameters
     ----------
-    a: ndarray
-        Parameters of the Beta distribution.
-    b: ndarray
-        Parameters of the Beta distribution.
-
-    Returns
-    -------
-    ndarray
-        Entropy of the Beta distribution.
-    """
-    ab = a + b
-    return -(a / ab) * digamma(a + 1) - (b / ab) * digamma(b + 1) + digamma(ab + 1)
-
-
-def compute_aleatoric_entropy(gn, sigma2):
-    """
-    Computes element-wise aleatoric entropy
-
-    Parameters
-    ----------
-    gn: ndarray
+    gn: (m, ) ndarray
         Events of the PPD.
-    sigma2: ndarray
+    sigma2: (m, ) ndarray
         Variance of the PPD.
 
     Returns
     -------
-    ndarray
+    (m, ) ndarray
         Aleatoric entropy.
     """
     a, b = match_gaussian_beta_moments(gn, sigma2)
-    return compute_beta_entropy(a, b)
+    ab = a + b
+    return -(a / ab) * digamma(a + 1) - (b / ab) * digamma(b + 1) + digamma(ab + 1)
 
 
-def compute_total_entropy(gn, eps=1e-7):
+def compute_total_entropy_binary(gn, eps=1e-12):
     """
     Computes element-wise total entropy, which is essentially the binary cross-entropy.
 
     Parameters
     ----------
-    gn: ndarray
+    gn: (m, ) ndarray
         Events of the PPD.
     eps: float
         Epsilon for numerical stability.
 
     Returns
     -------
-    ndarray
+    (m, ) ndarray
         Total entropy.
     """
 
     p = np.clip(gn, eps, 1 - eps)
     return -p * np.log(p) - (1 - p) * np.log(1 - p)
+
+
+def match_gaussian_dirichlet_moments(mu, sigma2, eps=1e-12):
+    """
+    Moment matching for a Dirichlet distribution to a Gaussian distribution.
+
+    Parameters
+    ----------
+    mu: (K, m) ndarray
+        Mean of the Gaussian distribution (probabilities).
+    sigma2: (K, m) ndarray
+        Variance of the Gaussian distribution.
+    eps: float
+        Epsilon for numerical stability.
+
+    Returns
+    -------
+    (K, m) ndarray
+        Parameters alpha of the Dirichlet distribution.
+    """
+    # Calculate Total Variance of the predictive mean vector
+    # ||mu||^2 sum over classes (axis=0)
+    numerator = 1.0 - np.sum(mu**2, axis=0)  # (m,)
+
+    # Sum of the CLT variances across classes (axis=0)
+    denominator = np.sum(sigma2, axis=0)  # (m,)
+
+    # Sum of the predictive variances is clipped to be strictly less than 1 - ||g_n||^2
+    denominator = np.minimum(denominator, numerator - eps)
+    denominator = np.maximum(denominator, eps)
+
+    # Strict moment matching
+    alpha0 = numerator / denominator - 1.0  # (m,)
+    alpha0 = np.maximum(alpha0, eps)  # Enforce positivity
+
+    # alpha_k = g_k * alpha0
+    alpha = mu * alpha0  # (K, m)
+
+    return alpha
+
+
+def compute_total_entropy_multiclass(gn, eps=1e-12):
+    """
+    Computes element-wise Total Uncertainty (Entropy).
+
+    H(y* | x*, D) = - sum_k g_k log g_k
+
+    Parameters
+    ----------
+    gn: (K, m) ndarray
+        Predictive mean vector (probabilities).
+    eps: float
+        Epsilon for numerical stability.
+
+    Returns
+    -------
+    (m,) ndarray
+        Total entropy.
+    """
+    gn = np.clip(gn, eps, 1.0)  # (K, m)
+    return -np.sum(gn * np.log(gn), axis=0)  # (m,)
+
+
+def compute_aleatoric_entropy_multiclass(gn, sigma2, eps=1e-12):
+    """
+    Computes aleatoric uncertainty for K-class classification, which is the
+    expected entropy of the categorical distribution under the Dirichlet
+    distribution with K classes.
+
+    E[H(p)] where p ~ Dir(a) = psi(alpha0 + 1) - sum_k (alpha_k / alpha0) *
+    psi(alpha_k + 1) where alpha0 = sum_k alpha_k.
+
+    Parameters
+    ----------
+    gn: (K, n) ndarray
+        Predictive mean vector.
+    sigma2: (K, n) ndarray
+        Predictive variance (from CLT).
+    eps: float
+        Epsilon for numerical stability.
+
+    Returns
+    -------
+    (m,) ndarray
+        Aleatoric entropy.
+    """
+    alpha = match_gaussian_dirichlet_moments(gn, sigma2, eps=eps)  # (K, m)
+    alpha_sum = np.sum(alpha, axis=0)  # alpha0, shape (m,)
+
+    # g_k = alpha_k / alpha0
+    g = alpha / alpha_sum  # (K, m)
+
+    term1 = digamma(alpha_sum + 1.0)  # (m,)
+    term2 = np.sum(g * digamma(alpha + 1.0), axis=0)  # (m,)
+
+    return term1 - term2
+
+
+def dirichlet_entropy_decomp_from_path(G, eps=1e-12):
+    """
+    Pragmatic Dirichlet moment-match extension for multi-class (e.g., 3-class Spirals).
+    G: (n, m, C) predictive path of class probabilities.
+    """
+    n, m, C = G.shape
+    p = np.clip(G[-1, :, :], eps, 1.0)  # (m,C)
+
+    # per-class vn using same increment estimator
+    vn_c = np.zeros((m, C), dtype=float)
+    if n >= 2:
+        deltas = G[1:, :, :] - G[:-1, :, :]
+        k = np.arange(2, n + 1)[:, None, None]
+        vn_c = (1.0 / (n - 1)) * np.sum((k**2) * (deltas**2), axis=0)
+
+    sigma2 = vn_c / max(n, 1)
+
+    # Calculate alpha using the helper function
+    alpha = match_gaussian_dirichlet_moments(p, sigma2, eps=eps)
+
+    # Calculate alpha0 sum for reporting
+    alpha0 = np.sum(alpha, axis=1)
+
+    # Total entropy H(p)
+    U_total = compute_total_entropy_multiclass(p, eps=eps)
+
+    # Expected categorical entropy under Dirichlet(alpha)
+    U_alea = compute_dirichlet_entropy(alpha)
+
+    U_epi = U_total - U_alea
+
+    return dict(
+        p=p,
+        vn=vn_c,
+        sigma2=sigma2,
+        alpha=alpha,
+        alpha0=alpha0,
+        U_total=U_total,
+        U_alea=U_alea,
+        U_epi=U_epi,
+    )
