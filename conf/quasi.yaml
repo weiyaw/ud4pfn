@@ -2,8 +2,8 @@ defaults:
   - _self_
 
 setup: "logistic-linear"
-x_design: "uniform:-10:10"
-x_rollout: "dirac-0"
+x_design: "uniform:-1:1"
+x_rollout: "truth"
 shuffle_data: True
 
 n_estimators: 1
