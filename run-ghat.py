@@ -132,12 +132,15 @@ def main(cfg: DictConfig):
     utils.write_to_local(f"{savedir}/gn.pickle", gn)
     logging.info(f"Built gn in {timer() - start:.2f} seconds")
 
-    start = timer()
-    gn_plus_1 = posterior.sample_gn_plus_1(
-        key_others, clf, t, x_grid, x_prev, y_prev, size=mc_samples
-    )
-    utils.write_to_local(f"{savedir}/gn_plus_1.pickle", gn_plus_1)
-    logging.info(f"Built gn_plus_1 in {timer() - start:.2f} seconds")
+    if mc_samples > 0:
+        start = timer()
+        gn_plus_1 = posterior.sample_gn_plus_1(
+            key_others, clf, t, x_grid, x_prev, y_prev, size=mc_samples
+        )
+        utils.write_to_local(f"{savedir}/gn_plus_1.pickle", gn_plus_1)
+        logging.info(f"Built gn_plus_1 in {timer() - start:.2f} seconds")
+    else:
+        logging.info(f"mc_samples={mc_samples}, skipping gn_plus_1")
 
 
 if __name__ == "__main__":
