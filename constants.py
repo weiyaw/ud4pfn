@@ -31,6 +31,7 @@ Y_STAR_MAP = {
 T_MAP = {
     **{k: [-2.0, -1.0, 0.0, 1.0, 2.0] for k in REGRESSION},
     **{k: [0, 1] for k in CLASSIFICATION},
+    "spiral": [0, 1, 2],
     "gamma-linear": [1.0, 2.0, 3.0],
     "poisson-linear": [1.0, 2.0, 3.0],
     "gamma": [1.0, 2.0, 3.0],
