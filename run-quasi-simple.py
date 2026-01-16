@@ -145,7 +145,7 @@ def run_single_outer_path(key, clf, t, x_new, x_init, y_init, n_points, save_pat
         for i in trange(n0, rollout_depth + n0, desc="rollout", leave=False):
             loopkey = jr.fold_in(key_path, i)
             loopkey, subkey_x, subkey_y = jr.split(loopkey, 3)
-            x_curr = SUPPORT_X[jr.choice(subkey_x, SUPPORT_X.shape[0], (1, ), p=PMF_X)]
+            x_curr = SUPPORT_X[jr.choice(subkey_x, SUPPORT_X.shape[0], (1,), p=PMF_X)]
             y_curr, _ = clf.sample(subkey_y, x_curr, x_rollout[:i], y_rollout[:i])
             x_rollout[i] = x_curr
             y_rollout[i] = y_curr.squeeze()
@@ -191,12 +191,6 @@ def main(cfg: DictConfig):
     key, key_outer, key_setup = jr.split(key, 3)
     torch.manual_seed(seed)
 
-    # generate some initial context
-    key_setup, subkey_x, subkey_y = jr.split(key_setup, 3)
-    x_prev = SUPPORT_X[jr.choice(subkey_x, len(SUPPORT_X), (n0,), p=PMF_X)]
-    y_prev = jr.bernoulli(subkey_y, expit(-0.5 + 2 * x_prev))
-    y_prev = y_prev.squeeze().astype(int)
-
     # x_new is a grid
     x_new = np.array([-1.0, 0.0, 1.0]).reshape(-1, 1)
     t = np.array([0, 1])
@@ -221,10 +215,16 @@ def main(cfg: DictConfig):
     logging.info(f"n_points: {n_points.tolist()}")
     logging.info(f"Number of n_points: {len(n_points)}")
 
+    # for each rollout, generate some fresh initial context
+    key_x, key_y = jr.split(jr.fold_in(key_setup, outer_idx))
+    x_init = SUPPORT_X[jr.choice(key_x, len(SUPPORT_X), (n0,), p=PMF_X)]
+    y_init = jr.bernoulli(key_y, expit(-0.5 + 2 * x_init))
+    y_init = y_init.squeeze().astype(int)
+
     key_outer = jr.fold_in(key_outer, outer_idx)
     save_path = savedir / f"outer-{outer_idx}"
     start = timer()
-    run_single_outer_path(key_outer, clf, t, x_new, x_prev, y_prev, n_points, save_path)
+    run_single_outer_path(key_outer, clf, t, x_new, x_init, y_init, n_points, save_path)
     logging.info(f"outer-{outer_idx}: {timer() - start:.2f} secs")
 
 
