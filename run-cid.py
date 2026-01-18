@@ -175,9 +175,7 @@ def main(cfg: DictConfig):
     torch.manual_seed(seed)
 
     setup = data.Gamma(key_setup, n=n0, shuffle=shuffle_data, x_design=x_design)
-
-    x_prev = setup.X
-    y_prev = setup.y
+    x_init, y_init = setup.X, setup.y
 
     x_new = np.linspace(0, 1, 3).reshape(-1, 1)
     t = np.linspace(0, 20, 101)
@@ -192,7 +190,7 @@ def main(cfg: DictConfig):
     elif x_rollout.startswith("dirac"):
         # extract dirac-xx
         mass = float(x_rollout.split(":")[1])
-        x_mass = np.full((1, x_prev.shape[1]), mass)
+        x_mass = np.full((1, x_init.shape[1]), mass)
         sample_x = partial(sample_x_dirac, x_mass=x_mass)
     else:
         raise ValueError(f"Unknown x_rollout: {x_rollout}")
@@ -217,9 +215,15 @@ def main(cfg: DictConfig):
     save_path = savedir / f"outer-{outer_idx}"
     start = timer()
 
-    key_path, key_eval = jr.split(key_outer)
+    key_path, key_init = jr.split(key_outer)
+
+    if not cfg.fix_data:
+        # refresh initial data if not fix_data
+        setup = data.Gamma(key_init, n=n0, shuffle=shuffle_data, x_design=x_design)
+        x_init, y_init = setup.X, setup.y
+
     x_rollout, y_rollout = run_rollout(
-        key_path, clf, x_new, sample_x, x_prev, y_prev, n_horizon, save_path
+        key_path, clf, x_new, sample_x, x_init, y_init, n_horizon, save_path
     )
     compute_Fn_Qn(clf, x_rollout, y_rollout, x_new, t, u, n_points, save_path)
     logging.info(f"outer-{outer_idx}: {timer() - start:.2f} secs")

@@ -6,6 +6,7 @@ n0: 25
 n_grid_size: 100
 n_horizon: 1000
 outer_idx: 0
+fix_data: False # if False, initial context will change with outer_idx
 seed: 999
 
 id: ${now:%Y-%m-%d}
@@ -14,7 +15,7 @@ git: ${githash:}
 
 hydra:
   run:
-    dir: "./outputs/${id}/quasi-simple n_est=${n_estimators} n0=${n0} seed=${seed}"
+    dir: "./outputs/${id}/quasi-simple n_est=${n_estimators} n0=${n0} fix=${fix_data} seed=${seed}"
   sweep:
     dir: ${hydra.run.dir}
     subdir: .

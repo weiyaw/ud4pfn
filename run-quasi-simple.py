@@ -171,6 +171,13 @@ def run_single_outer_path(key, clf, t, x_new, x_init, y_init, n_points, save_pat
                 logging.info(f"delta-{n}: {timer() - start:.2f} secs")
 
 
+def generate_initial_context(key_x, key_y, n0):
+    x_init = SUPPORT_X[jr.choice(key_x, len(SUPPORT_X), (n0,), p=PMF_X)]
+    y_init = jr.bernoulli(key_y, expit(-0.5 + 2 * x_init))
+    y_init = y_init.squeeze().astype(int)
+    return x_init, y_init
+
+
 @hydra.main(version_base=None, config_path="conf", config_name="quasi-simple")
 def main(cfg: DictConfig):
     OmegaConf.resolve(cfg)
@@ -190,6 +197,11 @@ def main(cfg: DictConfig):
     key = jr.key(seed)
     key, key_outer, key_setup = jr.split(key, 3)
     torch.manual_seed(seed)
+
+    if cfg.fix_data:
+        # fix initial context across rollouts/outer paths
+        _, subkey_x, subkey_y = jr.split(key_setup, 3)
+        x_init, y_init = generate_initial_context(subkey_x, subkey_y, n0)
 
     # x_new is a grid
     x_new = np.array([-1.0, 0.0, 1.0]).reshape(-1, 1)
@@ -215,11 +227,10 @@ def main(cfg: DictConfig):
     logging.info(f"n_points: {n_points.tolist()}")
     logging.info(f"Number of n_points: {len(n_points)}")
 
-    # for each rollout, generate some fresh initial context
-    key_x, key_y = jr.split(jr.fold_in(key_setup, outer_idx))
-    x_init = SUPPORT_X[jr.choice(key_x, len(SUPPORT_X), (n0,), p=PMF_X)]
-    y_init = jr.bernoulli(key_y, expit(-0.5 + 2 * x_init))
-    y_init = y_init.squeeze().astype(int)
+    if not cfg.fix_data:
+        # for each rollout, generate some fresh initial context
+        key_x, key_y = jr.split(jr.fold_in(key_setup, outer_idx))
+        x_init, y_init = generate_initial_context(key_x, key_y, n0)
 
     key_outer = jr.fold_in(key_outer, outer_idx)
     save_path = savedir / f"outer-{outer_idx}"
