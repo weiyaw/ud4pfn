@@ -126,28 +126,31 @@ def compute_Fn_Qn(clf, x_rollout, y_rollout, x_new, t, u, n_points, save_path):
 
     Returns
     -------
-    For each n, it saves F_n(x_new, t) and Q_n(x_new, u) along the rollout
-    trajectory in {save_path}/FnQn-{n}.pickle as a dictionary with keys "F_n",
-    "Q_n", "x_new", "t", "q", and "n". It skips the computation if the file
-    already exists.
+    It saves a dictionary with keys "F_n", "Q_n", "x_new", "t", "q", and "n" in
+    {save_path}/FnQn.pickle. "F_n" and "Q_n" are (K, p, m) and (K, q, m) arrays
+    respectively, i.e., they are F_n(x_new, t) and and Q_n(x_new, u) stacked
+    together.
     """
     assert x_rollout.shape[0] == y_rollout.shape[0]
     assert x_rollout.shape[0] >= max(n_points)
 
     start = timer()
+    F_n_all = []
+    Q_n_all = []
     for n in n_points:
-        F_n_path = save_path / f"FnQn-{n}.pickle"
-        if os.path.exists(F_n_path):
-            logging.info(f"FnQn-{n} exists")
-        else:
-            x_prev, y_prev = x_rollout[:n], y_rollout[:n]
-            F_n = clf.cdf(t, x_new, x_prev, y_prev)  # (p, m)
-            Q_n = clf.icdf(u, x_new, x_prev, y_prev)  # (q, m)
-            assert F_n.shape == (t.shape[0], x_new.shape[0])
-            utils.write_to(
-                F_n_path,
-                {"F_n": F_n, "Q_n": Q_n, "x_new": x_new, "t": t, "u": u, "n": n},
-            )
+        x_prev, y_prev = x_rollout[:n], y_rollout[:n]
+        F_n = clf.cdf(t, x_new, x_prev, y_prev)  # (p, m)
+        Q_n = clf.icdf(u, x_new, x_prev, y_prev)  # (q, m)
+        assert F_n.shape == (t.shape[0], x_new.shape[0])
+        assert Q_n.shape == (u.shape[0], x_new.shape[0])
+        F_n_all.append(F_n)
+        Q_n_all.append(Q_n)
+    F_n_all = np.stack(F_n_all)
+    Q_n_all = np.stack(Q_n_all)
+    utils.write_to(
+        save_path / "FnQn.pickle",
+        {"F_n": F_n_all, "Q_n": Q_n_all, "x_new": x_new, "t": t, "u": u, "n": n},
+    )
     logging.info(f"FnQn: {timer() - start:.2f} secs")
 
 

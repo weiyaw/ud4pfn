@@ -6,7 +6,7 @@ outer_idx: 0
 n_grid_size: 101
 n_horizon: 1000
 x_rollout: "truth"
-fix_data: False # if False, initial context will change with outer_idx
+fix_data: True            # if False, initial context will change with outer_idx
 seed: 999
 
 id: ${now:%Y-%m-%d}
