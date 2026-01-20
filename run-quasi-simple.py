@@ -223,7 +223,9 @@ def main(cfg: DictConfig):
     # value of n_points and compute the bias term along the way.
     n_start = n0 + 100
     n_end = n0 + n_horizon
-    n_points = np.rint(np.geomspace(n_start, n_end, n_grid_size)).astype(int)
+    n_head = np.arange(n0, n_start, 5).astype(int)
+    n_tail = np.rint(np.geomspace(n_start, n_end, n_grid_size)).astype(int)
+    n_points = np.unique(np.concatenate([n_head, n_tail]))
     logging.info(f"n_points: {n_points.tolist()}")
     logging.info(f"Number of n_points: {len(n_points)}")
 
