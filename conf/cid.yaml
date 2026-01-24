@@ -2,11 +2,12 @@ defaults:
   - _self_
 
 n_estimators: 1
-outer_idx: 0
-n_grid_size: 101
+sample_idx: 0
+n_grid_size: 101 # the number of points to evaluate F_n/Q_n
 n_horizon: 1000
+setup: "gaussian-linear" # "gaussian-linear", "probit-mixture" or "gamma"
+data_size: 25
 x_rollout: "truth"
-fix_data: True            # if False, initial context will change with outer_idx
 seed: 999
 
 id: ${now:%Y-%m-%d}
@@ -15,8 +16,33 @@ git: ${githash:}
 
 hydra:
   run:
-    dir: "./outputs/${id}/cid x_rollout=${x_rollout} n_est=${n_estimators} fix=${fix_data} seed=${seed}"
+    dir: "./outputs/${id}/cid setup=${setup} n0=${data_size} x_rollout=${x_rollout} n_est=${n_estimators} seed=${seed}"
   sweep:
     dir: ${hydra.run.dir}
     subdir: .
+
+
+
+
+
+
+
+# n_estimators: 1
+# outer_idx: 0
+# n_grid_size: 101
+# n_horizon: 1000
+# x_rollout: "truth"
+# fix_data: True            # if False, initial context will change with outer_idx
+# seed: 999
+
+# id: ${now:%Y-%m-%d}
+# lastrun: ${now:%Y-%m-%dT%H:%M:%S%z}
+# git: ${githash:}
+
+# hydra:
+#   run:
+#     dir: "./outputs/${id}/cid x_rollout=${x_rollout} n_est=${n_estimators} fix=${fix_data} seed=${seed}"
+#   sweep:
+#     dir: ${hydra.run.dir}
+#     subdir: .
 

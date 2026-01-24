@@ -54,7 +54,7 @@ def main(cfg: DictConfig):
         n_estimators=n_estimators,
         softmax_temperature=1.0,
         fit_mode="low_memory",
-        model_path="tabpfn-model/tabpfn-v2-classifier.ckpt",
+        model_path="tabpfn-model/tabpfn-v2.5-classifier-v2.5_default.ckpt",
     )
 
     x_prev = setup.X

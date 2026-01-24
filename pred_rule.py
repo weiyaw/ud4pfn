@@ -189,7 +189,8 @@ class TabPFNRegressorPPD(TabPFNRegressor):
 
         # t must be a 1D float array
         t = np.atleast_1d(t)
-        assert t.ndim == 1 and t.dtype == float
+        assert t.ndim == 1
+        assert np.issubdtype(t.dtype, np.floating)
 
         bardist.borders = bardist.borders.cpu()
         results = []
@@ -301,7 +302,8 @@ class TabPFNClassifierPPD(TabPFNClassifier):
 
         # t must be a 1D integer array
         t = np.atleast_1d(t)
-        assert t.ndim == 1 and t.dtype == int
+        assert t.ndim == 1
+        assert np.issubdtype(t.dtype, np.integer)
 
         def predict_event_single_t(single_t: int) -> np.ndarray:
             # Create a mask for the class: (num_classes,)

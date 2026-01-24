@@ -62,14 +62,14 @@ def main(cfg: DictConfig):
             n_estimators=n_estimators,
             softmax_temperature=1.0,
             fit_mode="low_memory",
-            model_path="tabpfn-model/tabpfn-v2-regressor.ckpt",
+            model_path="tabpfn-model/tabpfn-v2.5-regressor-v2.5_default.ckpt",
         )
     elif setup_name in CLASSIFICATION:
         clf = TabPFNClassifierPPD(
             n_estimators=n_estimators,
             softmax_temperature=1.0,
             fit_mode="low_memory",
-            model_path="tabpfn-model/tabpfn-v2-classifier.ckpt",
+            model_path="tabpfn-model/tabpfn-v2.5-classifier-v2.5_default.ckpt",
         )
     else:
         raise ValueError(f"Unknown data {data}")
@@ -96,7 +96,7 @@ def main(cfg: DictConfig):
         else:
             lin1 = np.linspace(-4.0, 4.0, m)
             lin2 = np.linspace(-4.0, 4.0, m)
-        x1, x2 = np.meshgrid(lin1, lin2, indexing='ij')
+        x1, x2 = np.meshgrid(lin1, lin2, indexing="ij")
         x_grid = np.stack([x1, x2], axis=-1).reshape(-1, 2)
         grid_shape = (len(lin1), len(lin2))
     else:

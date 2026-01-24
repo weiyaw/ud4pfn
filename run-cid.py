@@ -3,8 +3,6 @@ import jax
 import jax.numpy as jnp
 import jax.random as jr
 import torch
-import joblib
-import math
 from pathlib import Path
 from tqdm import trange
 from tqdm.auto import tqdm
@@ -18,8 +16,7 @@ import data
 
 from functools import partial
 
-from constants import REGRESSION, CLASSIFICATION, T_MAP
-from pred_rule import TabPFNRegressorPPD, assert_ppd_args_shape
+from pred_rule import TabPFNRegressorPPD, TabPFNClassifierPPD, assert_ppd_args_shape
 
 os.environ["TABPFN_DISABLE_TELEMETRY"] = "1"
 
@@ -82,11 +79,11 @@ def run_rollout(key, clf, x_new, sample_x, x_init, y_init, rollout_depth, save_p
     else:
         start = timer()
         x_rollout = np.vstack([x_init, np.zeros((rollout_depth, x_init.shape[1]))])
-        y_rollout = np.append(y_init, np.zeros((rollout_depth,)))
+        y_rollout = np.append(y_init, np.zeros((rollout_depth,), dtype=y_init.dtype))
         for i in trange(n0, rollout_depth + n0, desc="rollout", leave=False):
             loopkey = jr.fold_in(key, i)
             loopkey, subkey_x, subkey_y = jr.split(loopkey, 3)
-            x_curr = sample_x(subkey_x, 1, x_rollout[:i])
+            x_curr = sample_x(subkey_x, 1, None)  # we don't use x_prev right now
             y_curr, _ = clf.sample(subkey_y, x_curr, x_rollout[:i], y_rollout[:i])
             x_rollout[i] = x_curr
             y_rollout[i] = y_curr.squeeze()
@@ -96,13 +93,12 @@ def run_rollout(key, clf, x_new, sample_x, x_init, y_init, rollout_depth, save_p
     return x_rollout, y_rollout
 
 
-def compute_Fn_Qn(clf, x_rollout, y_rollout, x_new, t, u, n_points, save_path):
+def compute_Fn(clf, x_rollout, y_rollout, x_new, t, n_points, save_path):
     """
-    Compute F_n(x_new, t) and Q_n(x_new, u) along the rollout trajectory where
-    F_n(x_new, t) = P( y <= t | x_new, x_{1:n}, y_{1:n}) and Q_n(x_new, u) is
-    the quantile (inverse cdf) function of F_n.
+    Compute F_n(x_new, t) along the rollout trajectory where
+    F_n(x_new, t) = P( y <= t | x_new, x_{1:n}, y_{1:n})
 
-    For each i point in n_points, it will evaluate F_n and Q_n on x_rollout[:i]
+    For each i point in n_points, it will evaluate F_n on x_rollout[:i]
     and y_rollout[:i].
 
     Parameters
@@ -117,41 +113,81 @@ def compute_Fn_Qn(clf, x_rollout, y_rollout, x_new, t, u, n_points, save_path):
         Query covariates.
     t: (p, ) array
         Event of the PPD.
-    u: (q, ) array
-        Quantile of the PPD.
     n_points : list of int of length K
-        List of points to evaluate F_n and Q_n.
+        List of points to evaluate F_n.
     save_path : Path
         Path to save the computed bias.
 
     Returns
     -------
-    It saves a dictionary with keys "F_n", "Q_n", "x_new", "t", "q", and "n" in
-    {save_path}/FnQn.pickle. "F_n" and "Q_n" are (K, p, m) and (K, q, m) arrays
-    respectively, i.e., they are F_n(x_new, t) and and Q_n(x_new, u) stacked
+    It saves a dictionary with keys "F_n", "x_new", "t", and "n" in
+    {save_path}/Fn.pickle. "F_n" is (K, p, m) array, i.e., F_n(x_new, t)
     together.
     """
     assert x_rollout.shape[0] == y_rollout.shape[0]
-    assert x_rollout.shape[0] >= max(n_points)
+    assert x_rollout.shape[0] >= max(n_points), "Incomplete rollout"
 
     start = timer()
     F_n_all = []
+    for n in n_points:
+        x_prev, y_prev = x_rollout[:n], y_rollout[:n]
+        F_n = clf.predict_event(t, x_new, x_prev, y_prev)  # (p, m)
+        assert F_n.shape == (t.shape[0], x_new.shape[0])
+        F_n_all.append(F_n)
+    F_n_all = np.stack(F_n_all)
+    utils.write_to(
+        save_path / "Fn.pickle",
+        {"F_n": F_n_all, "x_new": x_new, "t": t, "n": n_points},
+    )
+    logging.info(f"Fn: {timer() - start:.2f} secs")
+
+
+def compute_Qn(clf, x_rollout, y_rollout, x_new, u, n_points, save_path):
+    """
+    Compute Q_n(x_new, u) along the rollout trajectory where
+    Q_n(x_new, u) is the quantile (inverse cdf) function of F_n.
+
+    For each i point in n_points, it will evaluate Q_n on x_rollout[:i]
+    and y_rollout[:i].
+
+    Parameters
+    ----------
+    clf: TabPFNRegressorPPD
+        PPD regressor.
+    x_rollout : (N, d) array
+        Rolled out covariates.
+    y_rollout : (N,) array
+        Rolled out targets.
+    x_new : (m, d) array
+        Query covariates.
+    u: (q, ) array
+        Quantile of the PPD.
+    n_points : list of int of length K
+        List of points to evaluate Q_n.
+    save_path : Path
+        Path to save the computed bias.
+
+    Returns
+    -------
+    It saves a dictionary with keys "Q_n", "x_new", "u", and "n" in
+    {save_path}/Qn.pickle. "Q_n" is (K, q, m) array.
+    """
+    assert x_rollout.shape[0] == y_rollout.shape[0]
+    assert x_rollout.shape[0] >= max(n_points), "Incomplete rollout"
+
+    start = timer()
     Q_n_all = []
     for n in n_points:
         x_prev, y_prev = x_rollout[:n], y_rollout[:n]
-        F_n = clf.cdf(t, x_new, x_prev, y_prev)  # (p, m)
-        Q_n = clf.icdf(u, x_new, x_prev, y_prev)  # (q, m)
-        assert F_n.shape == (t.shape[0], x_new.shape[0])
+        Q_n = clf.icdf(u, x_new, x_prev, y_prev)
         assert Q_n.shape == (u.shape[0], x_new.shape[0])
-        F_n_all.append(F_n)
         Q_n_all.append(Q_n)
-    F_n_all = np.stack(F_n_all)
     Q_n_all = np.stack(Q_n_all)
     utils.write_to(
-        save_path / "FnQn.pickle",
-        {"F_n": F_n_all, "Q_n": Q_n_all, "x_new": x_new, "t": t, "u": u, "n": n},
+        save_path / "Qn.pickle",
+        {"Q_n": Q_n_all, "x_new": x_new, "u": u, "n": n_points},
     )
-    logging.info(f"FnQn: {timer() - start:.2f} secs")
+    logging.info(f"Qn: {timer() - start:.2f} secs")
 
 
 @hydra.main(version_base=None, config_path="conf", config_name="cid")
@@ -161,32 +197,33 @@ def main(cfg: DictConfig):
     logging.info(OmegaConf.to_yaml(cfg))
 
     n_estimators = int(cfg.n_estimators)
-    outer_idx = int(cfg.outer_idx)
+    sample_idx = int(cfg.sample_idx)
     n_grid_size = int(cfg.n_grid_size)
     n_horizon = int(cfg.n_horizon)
     seed = int(cfg.seed)
     x_rollout = cfg.x_rollout  # "truth" or "dirac:xx"
-    n0 = 25
+    n0 = cfg.data_size
+    setup_name = cfg.setup
     x_design = "uniform:0:1"
-    shuffle_data = True
 
     torch.set_num_threads(1)
+
+    savedir = Path(hydra.core.hydra_config.HydraConfig.get().runtime.output_dir)
+    logging.info(f"Experiment directory: {savedir}")
 
     # reproducibility
     key = jr.key(seed)
     key, key_outer, key_setup = jr.split(key, 3)
     torch.manual_seed(seed)
 
-    setup = data.Gamma(key_setup, n=n0, shuffle=shuffle_data, x_design=x_design)
+    try:
+        Setup = getattr(data, utils.kebab_to_camel(setup_name))
+        setup = Setup(key_setup, n0, True, x_design)
+    except AttributeError:
+        raise ValueError(f"Data {setup_name} not found in data module")
+
     x_init, y_init = setup.X, setup.y
-
-    x_new = np.linspace(0, 1, 3).reshape(-1, 1)
-    t = np.linspace(0, 20, 101)
-    u = np.linspace(0.01, 0.99, 99)
-    assert x_new.ndim == 2 and t.ndim == 1
-
-    savedir = Path(hydra.core.hydra_config.HydraConfig.get().runtime.output_dir)
-    logging.info(f"Experiment directory: {savedir}")
+    dim_x = x_init.shape[1]
 
     if x_rollout == "truth":
         sample_x = partial(sample_x_truth, get_x=setup.get_x, x_design=x_design)
@@ -198,38 +235,58 @@ def main(cfg: DictConfig):
     else:
         raise ValueError(f"Unknown x_rollout: {x_rollout}")
 
-    clf = TabPFNRegressorPPD(
-        n_estimators=n_estimators,
-        softmax_temperature=1.0,
-        fit_mode="low_memory",
-        model_path="tabpfn-model/tabpfn-v2.5-regressor-v2.5_default.ckpt",
-    )
+    if setup_name in "gaussian-linear" or setup_name in "gamma":
+        clf = TabPFNRegressorPPD(
+            n_estimators=n_estimators,
+            softmax_temperature=1.0,
+            fit_mode="low_memory",
+            model_path="tabpfn-model/tabpfn-v2.5-regressor-v2.5_default.ckpt",
+        )
+        t = np.linspace(y_init.min(), y_init.max(), 100)
+        u = np.linspace(0.01, 0.99, 99)
+    elif setup_name in "probit-mixture":
+        clf = TabPFNClassifierPPD(
+            n_estimators=n_estimators,
+            softmax_temperature=1.0,
+            fit_mode="low_memory",
+            model_path="tabpfn-model/tabpfn-v2.5-classifier-v2.5_default.ckpt",
+        )
+        t = np.array([0, 1])
+        u = None
+    else:
+        raise ValueError(f"Unknown data {setup_name}")
+
+    x_new = np.tile(np.linspace(-1, 1, 5)[:, None], (1, dim_x))
+    assert x_new.ndim == 2 and t.ndim == 1
 
     # ------------------------------------------------------------
     # 3.  Run A Single Outer Path (Quasi-Martingale Check)
     # ------------------------------------------------------------
-    # Run one outer path (indexed by outer_idx). We rollout until the largest
-    # value of n_points and compute F_n(x_new, t) term along the way.
+    # Run one path (indexed by sample_idx). We rollout until the largest value
+    # of n_points and compute F_n(x_new, t) term along the way.
 
     n_points = np.rint(np.linspace(n0, n0 + n_horizon, n_grid_size)).astype(int)
     logging.info(f"Number of n_points: {len(n_points)}")
 
-    key_outer = jr.fold_in(key_outer, outer_idx)
-    save_path = savedir / f"outer-{outer_idx}"
+    utils.write_to(
+        f"{savedir}/data.pickle",
+        {"x_init": x_init, "y_init": y_init, "n": n_points, "t": t, "u": u},
+    )
+
+    key_outer = jr.fold_in(key_outer, sample_idx)
+    save_path = savedir / f"sample-{sample_idx}"
     start = timer()
 
     key_path, key_init = jr.split(key_outer)
 
-    if not cfg.fix_data:
-        # refresh initial data if not fix_data
-        setup = data.Gamma(key_init, n=n0, shuffle=shuffle_data, x_design=x_design)
-        x_init, y_init = setup.X, setup.y
-
     x_rollout, y_rollout = run_rollout(
-        key_path, clf, x_new, sample_x, x_init, y_init, n_horizon, save_path
+        key_path, clf, x_new, sample_x, x_init, y_init, max(n_points), save_path
     )
-    compute_Fn_Qn(clf, x_rollout, y_rollout, x_new, t, u, n_points, save_path)
-    logging.info(f"outer-{outer_idx}: {timer() - start:.2f} secs")
+    compute_Fn(clf, x_rollout, y_rollout, x_new, t, n_points, save_path)
+
+    if isinstance(clf, TabPFNRegressorPPD):
+        compute_Qn(clf, x_rollout, y_rollout, x_new, u, n_points, save_path)
+    logging.info(f"sample-{sample_idx}: {timer() - start:.2f} secs")
 
 
 if __name__ == "__main__":
