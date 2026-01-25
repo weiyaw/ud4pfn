@@ -68,8 +68,11 @@ class TabPFNRegressorPPD(TabPFNRegressor):
         assert logits.ndim == 2, "logits must be 2D array (num_data, num_of_bins)"
 
         y_new = []
+        EPS = 1e-5
         for i in range(size):
-            all_u = jr.uniform(jr.fold_in(key, i), shape=(logits.shape[0],))
+            all_u = jr.uniform(
+                jr.fold_in(key, i), shape=(logits.shape[0],), minval=EPS, maxval=1 - EPS
+            ) # icdf doesn't like u that are too close to 0 and 1
             y_new.append(
                 np.array(
                     [bardist.icdf(l, float(u)).cpu() for l, u in zip(logits, all_u)]
