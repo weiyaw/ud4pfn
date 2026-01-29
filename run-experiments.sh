@@ -4,26 +4,6 @@ for outer_idx in $(seq 0 99); do
     python run-quasi-simple.py id="2026-01-33" fix_data=False n_estimators=16 outer_idx=$outer_idx seed=1000
 done
 
-# quasi martingale check (not in paper)
-for outer_idx in $(seq 0 99); do
-    for n_est in 8 16 64; do
-        python run-quasi.py id="2026-01-04" x_design="uniform:-1:1" x_rollout=truth n_estimators=$n_est setup="gaussian-linear" outer_idx=$outer_idx seed=1000
-        python run-quasi.py id="2026-01-04" x_design="uniform:-1:1" x_rollout=truth n_estimators=$n_est setup="probit-mixture" outer_idx=$outer_idx seed=1000
-    done
-done
-
-# martingale/cid check (not in paper)
-for seed in $(seq 1000 1004); do
-    for sample_idx in $(seq 0 99); do
-        for n_est in 8 16; do
-            python run-cid.py id="2026-01-43" n_estimators=$n_est seed=$seed sample_idx=$sample_idx setup=gaussian-linear
-            python run-cid.py id="2026-01-43" n_estimators=$n_est seed=$seed sample_idx=$sample_idx setup=probit-mixture
-            python run-cid.py id="2026-01-43" n_estimators=$n_est seed=$seed sample_idx=$sample_idx setup=gamma
-        done
-    done
-done
-
-
 # coverage
 for seed in $(seq 1000 1099); do
     for setup in gaussian-linear gaussian-polynomial gaussian-linear-dependent-error gaussian-sine poisson-linear probit-mixture categorical-linear; do
