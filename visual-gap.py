@@ -1,17 +1,13 @@
 # %%
 import re
 
+import matplotlib.pyplot as plt
 import numpy as np
 
-from scipy.stats import norm
-from timeit import default_timer as timer
 import utils
+from constants import DEFAULT_T_IDX
 from metrics import build_pointwise_band, build_simultaneous_band
-from posterior import compute_vn, compute_un
-
-import matplotlib.pyplot as plt
-
-from constants import Y_STAR_MAP
+from posterior import compute_un, compute_vn
 
 # %load_ext autoreload
 # %autoreload 2
@@ -71,10 +67,7 @@ for name in regressor + classifier:
         grid_shape = data["grid_shape"]
 
         t = data["t"]
-        if name in regressor:
-            t_idx = len(t) // 2  # this corresponds to the desired t for regressor
-        elif name in classifier:
-            t_idx = 1
+        t_idx = DEFAULT_T_IDX[name]
         gn = utils.read_from(f"{outdir}/gn.pickle")[t_idx]
         g0_to_gn = utils.read_from(f"{outdir}/g0_to_gn.pickle")[:, t_idx]
         gn_plus_1 = utils.read_from(f"{outdir}/gn_plus_1.pickle")[:, t_idx]

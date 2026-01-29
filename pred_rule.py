@@ -1,12 +1,11 @@
-from tabpfn import TabPFNClassifier, TabPFNRegressor
-import numpy as np
-import torch
-from typing import Callable
-
 import warnings
+
 import jax
 import jax.numpy as jnp
 import jax.random as jr
+import numpy as np
+import torch
+from tabpfn import TabPFNClassifier, TabPFNRegressor
 
 
 def assert_ppd_args_shape(x_new, x_prev, y_prev):
@@ -26,7 +25,7 @@ class TabPFNRegressorPPD(TabPFNRegressor):
 
     def sample(
         self,
-        key: jax.random.key,
+        key: jr.key,
         x_new: np.ndarray,
         x_prev: np.ndarray,
         y_prev: np.ndarray,
@@ -72,7 +71,7 @@ class TabPFNRegressorPPD(TabPFNRegressor):
         for i in range(size):
             all_u = jr.uniform(
                 jr.fold_in(key, i), shape=(logits.shape[0],), minval=EPS, maxval=1 - EPS
-            ) # icdf doesn't like u that are too close to 0 and 1
+            )  # icdf doesn't like u that are too close to 0 and 1
             y_new.append(
                 np.array(
                     [bardist.icdf(l, float(u)).cpu() for l, u in zip(logits, all_u)]
@@ -212,9 +211,6 @@ class TabPFNRegressorPPD(TabPFNRegressor):
         return np.stack(results)
 
 
-# %%
-
-
 class TabPFNClassifierPPD(TabPFNClassifier):
 
     def sample(
@@ -345,22 +341,6 @@ class TabPFNClassifierPPD(TabPFNClassifier):
             Shape: (p, m)
         """
         return self.pmf(t, x_new, x_prev, y_prev)
-
-
-class BayesianBootstrapPPD:
-    def __init__(self):
-        self.x = None
-        self.y = None
-
-    def fit(self, x: np.ndarray, y: np.ndarray):
-        self.x = x
-        self.y = y
-
-    def sample(self, key: jr.key, x_new: np.ndarray, size: int = 1) -> np.ndarray:
-        pass
-
-    def predict_event(self, t: np.ndarray, x_new: np.ndarray) -> np.ndarray:
-        pass
 
 
 # %%

@@ -1,23 +1,18 @@
-import os
-import warnings
-from typing import Callable
-import torch
-
-import numpy as np
-import jax
-import jax.random as jr
-import utils
 import logging
+import os
 from timeit import default_timer as timer
 
-from omegaconf import DictConfig, OmegaConf
 import hydra
+import jax.random as jr
+import numpy as np
+import torch
+from omegaconf import DictConfig, OmegaConf
 
-import posterior
-from pred_rule import TabPFNClassifierPPD, TabPFNRegressorPPD
 import data
-
-from constants import REGRESSION, CLASSIFICATION, T_MAP
+import posterior
+import utils
+from constants import T_MAP
+from pred_rule import TabPFNClassifierPPD
 
 os.environ["TABPFN_DISABLE_TELEMETRY"] = "1"
 

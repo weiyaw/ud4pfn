@@ -1,10 +1,10 @@
-import numpy as np
 import jax
 import jax.numpy as jnp
 import jax.random as jr
+import numpy as np
 from jax.scipy.stats import norm
+from scipy.special import digamma, gammaln
 from scipy.stats import chi2
-from scipy.special import gammaln, digamma
 
 
 def compute_pointwise_coverage(true_curve, bands):
@@ -289,45 +289,3 @@ def compute_aleatoric_entropy_multiclass(gn, sigma2, eps=1e-12):
 
     return term1 - term2
 
-
-def dirichlet_entropy_decomp_from_path(G, eps=1e-12):
-    """
-    Pragmatic Dirichlet moment-match extension for multi-class (e.g., 3-class Spirals).
-    G: (n, m, C) predictive path of class probabilities.
-    """
-    n, m, C = G.shape
-    p = np.clip(G[-1, :, :], eps, 1.0)  # (m,C)
-
-    # per-class vn using same increment estimator
-    vn_c = np.zeros((m, C), dtype=float)
-    if n >= 2:
-        deltas = G[1:, :, :] - G[:-1, :, :]
-        k = np.arange(2, n + 1)[:, None, None]
-        vn_c = (1.0 / (n - 1)) * np.sum((k**2) * (deltas**2), axis=0)
-
-    sigma2 = vn_c / max(n, 1)
-
-    # Calculate alpha using the helper function
-    alpha = match_gaussian_dirichlet_moments(p, sigma2, eps=eps)
-
-    # Calculate alpha0 sum for reporting
-    alpha0 = np.sum(alpha, axis=1)
-
-    # Total entropy H(p)
-    U_total = compute_total_entropy_multiclass(p, eps=eps)
-
-    # Expected categorical entropy under Dirichlet(alpha)
-    U_alea = compute_dirichlet_entropy(alpha)
-
-    U_epi = U_total - U_alea
-
-    return dict(
-        p=p,
-        vn=vn_c,
-        sigma2=sigma2,
-        alpha=alpha,
-        alpha0=alpha0,
-        U_total=U_total,
-        U_alea=U_alea,
-        U_epi=U_epi,
-    )

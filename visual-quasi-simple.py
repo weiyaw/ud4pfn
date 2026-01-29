@@ -1,14 +1,13 @@
 # %%
 import re
-import numpy as np
-import scipy
-from scipy.special import logsumexp
-import utils
 
 import matplotlib.pyplot as plt
+import numpy as np
 import pandas as pd
+import scipy
+from scipy.special import logsumexp
 
-from constants import Y_STAR_MAP
+import utils
 
 # %load_ext autoreload
 # %autoreload 2
@@ -177,7 +176,7 @@ def get_bias_and_n(outer_dirs, include_idx):
 # %%
 n_est_list = [8, 16]
 n0 = 25
-t_idx = 1
+t_idx = 1 # this depends on the t computed in run-quasi-simple.py
 x_new_idx = 2
 
 # geom spaced points

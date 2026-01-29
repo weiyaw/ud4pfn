@@ -1,13 +1,14 @@
 # %%
-from abc import abstractmethod
 import math
-import numpy as np
+from abc import abstractmethod
+from dataclasses import dataclass
+
 import jax
 import jax.numpy as jnp
 import jax.random as jr
-from scipy.stats import norm, poisson, gamma
-from dataclasses import dataclass
+import numpy as np
 import pandas as pd
+from scipy.stats import gamma, norm, poisson
 
 
 @dataclass
@@ -91,6 +92,7 @@ class Data1D(Data):
     def visualise_true_event(self):
         # visualise true probability of event
         import matplotlib.pyplot as plt
+
         import utils
         from constants import T_MAP
 
@@ -449,6 +451,7 @@ class Data2D(Data):
 
     def visualise_true_event(self) -> None:
         import matplotlib.pyplot as plt
+
         import utils
         from constants import T_MAP
 

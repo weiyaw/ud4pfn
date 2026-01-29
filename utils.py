@@ -1,8 +1,8 @@
-import pickle
 import logging
 import os
-import subprocess
+import pickle
 import re
+import subprocess
 
 
 def githash():

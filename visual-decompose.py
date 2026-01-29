@@ -1,18 +1,16 @@
 # %%
-import numpy as np
-from timeit import default_timer as timer
-import utils
-from metrics import (
-    compute_total_entropy_binary,
-    compute_aleatoric_entropy_binary,
-    compute_total_entropy_multiclass,
-    compute_aleatoric_entropy_multiclass,
-)
-from posterior import compute_vn, compute_un
-
 import matplotlib.pyplot as plt
+import numpy as np
 
-from constants import Y_STAR_MAP
+import utils
+from constants import DEFAULT_T_IDX
+from metrics import (
+    compute_aleatoric_entropy_binary,
+    compute_aleatoric_entropy_multiclass,
+    compute_total_entropy_binary,
+    compute_total_entropy_multiclass,
+)
+from posterior import compute_vn
 
 # %load_ext autoreload
 # %autoreload 2
@@ -23,7 +21,7 @@ image_dir = "../paper/images"
 # %%
 ## 1D UQ decomposition at various x^*
 n_list = [15, 50, 75, 150]
-t_idx = 1
+t_idx = DEFAULT_T_IDX["logistic-linear"]
 fig, axes = plt.subplots(2, 2, figsize=(12, 6))
 
 for n, ax in zip(n_list, axes.flatten()):
@@ -67,7 +65,7 @@ fig.savefig(f"{image_dir}/ud-logreg-xstar.pdf")
 # %%
 ## 1D UQ decomposition at various n
 n_list = range(75, 201, 5)
-t_idx = 1
+t_idx = DEFAULT_T_IDX["logistic-linear"]
 x_grid_idx = [0, 25, 50, 75, 100, 125, 150]
 
 total_entropy_all = []
@@ -155,7 +153,7 @@ setup_regex_list = [
     ("two-moons-2.+n=30", "Moons 2, n=30"),
     ("two-moons-2.+n=100", "Moons 2, n=100"),
 ]
-t_idx = 1
+t_idx = DEFAULT_T_IDX["two-moons-1"]
 
 fig, axes = plt.subplots(5, len(setup_regex_list), figsize=(18, 20))
 
@@ -225,7 +223,7 @@ plt.savefig(f"{image_dir}/ud-two-moons.pdf")
 # %%
 ## 2D UQ decomposition (two moons) - subset
 setup_regex, title = setup_regex_list[0]
-t_idx = 1
+t_idx = DEFAULT_T_IDX["two-moons-1"]
 
 fig, axes = plt.subplots(1, 3, figsize=(15, 4))
 
@@ -305,8 +303,8 @@ K = np.unique(y_prev).size  # number of classes
 
 t = data["t"]
 grid_shape = data["grid_shape"]
-gn = utils.read_from(f"{outdir}/gn.pickle")  # (K - 1, m)
-g0_to_gn = utils.read_from(f"{outdir}/g0_to_gn.pickle")  # (n+1, K - 1, m)
+gn = utils.read_from(f"{outdir}/gn.pickle")  # (K, m)
+g0_to_gn = utils.read_from(f"{outdir}/g0_to_gn.pickle")  # (n+1, K, m)
 true_prob = data["true_prob"]
 
 clt_var = [compute_vn(g0_to_gn[:, k], type="pointwise") / n for k in range(K)]

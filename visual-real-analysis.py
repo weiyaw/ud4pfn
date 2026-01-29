@@ -1,17 +1,16 @@
 # %%
 import re
+
+import matplotlib.pyplot as plt
 import numpy as np
+
 import utils
+from constants import DEFAULT_T_IDX
 from metrics import (
     build_pointwise_band,
     build_simultaneous_band,
-    compute_pointwise_coverage,
-    compute_simultaneous_coverage,
 )
-from posterior import compute_vn, compute_un
-
-import matplotlib.pyplot as plt
-
+from posterior import compute_vn
 
 # %%
 # Labour force
@@ -26,7 +25,7 @@ y_prev = data["y_prev"]
 x_grid = data["x_grid"]
 grid_shape = data["grid_shape"]
 
-t_idx = 1
+t_idx = DEFAULT_T_IDX[setup_name]
 t = data["t"][t_idx]
 gn = utils.read_from(f"{outdir}/gn.pickle")[t_idx]
 g0_to_gn = utils.read_from(f"{outdir}/g0_to_gn.pickle")[:, t_idx]
@@ -66,7 +65,7 @@ fig.savefig("images/labour-force-vn.pdf")
 # %%
 # Fibre strength
 expdir = "../outputs/2026-01-51/"
-outdir = utils.get_matching_dirs(exp_dir, r"fibre-strength.+n_est=64")
+outdir = utils.get_matching_dirs(expdir, r"fibre-strength.+n_est=64")
 assert len(outdir) == 1
 outdir = outdir[0]
 setup_name = re.search(r"setup=([^\s]+)", outdir).group(1)
@@ -76,7 +75,7 @@ y_prev = data["y_prev"]
 x_grid = data["x_grid"]
 grid_shape = data["grid_shape"]
 
-t_idx = 1
+t_idx = DEFAULT_T_IDX[setup_name]
 t = data["t"][t_idx]
 gn = utils.read_from(f"{outdir}/gn.pickle")[t_idx]
 g0_to_gn = utils.read_from(f"{outdir}/g0_to_gn.pickle")[:, t_idx]
