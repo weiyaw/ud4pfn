@@ -14,8 +14,8 @@ from constants import Y_STAR_MAP
 # %autoreload 2
 np.set_printoptions(formatter={"float_kind": "{:.2e}".format}, linewidth=200)
 pd.set_option("display.max_rows", None)
-id_dir = "../outputs/2026-01-33"
-image_dir = "../paper/images"
+id_dir = "../outputs/2026-01-04"
+# image_dir = "../paper/images"
 
 
 def trapezoidal_cumsum(n, b):
@@ -72,10 +72,9 @@ def compile_outer(outer_dir, include_idx):
         if int(re.search(r"delta-(\d+)", p).group(1)) in include_idx
     ]
     deltas_raw = [utils.read_from(p) for p in delta_paths]
-    deltas = np.asarray([d["delta"] for d in deltas_raw])
-    weights = np.array([d["weight"] for d in deltas_raw])
-    n = np.asarray([d["n"] for d in deltas_raw])
-    return deltas, weights, n
+    deltas = np.asarray([d["delta"] for d in deltas_raw]) # (k, mc_samples, t, x_new)
+    n = np.asarray([d["n"] for d in deltas_raw]) # (k,)
+    return deltas, n
 
 
 def fit_lm(x, y):
@@ -163,9 +162,9 @@ def get_bias_and_n(outer_dirs, include_idx):
     b_all = []
     n_all = []
     for d in outer_dirs:
-        # deltas: (k, 8, t, x_new), weights: (k, 8), k: (k,)
-        deltas, weights, n = compile_outer(d, include_idx)
-        b = np.sum(deltas * weights[:, :, None, None], axis=1)  # (k, t, x_new)
+        # deltas: (k, mc_samples, t, x_new), n: (k,)
+        deltas, n = compile_outer(d, include_idx)
+        b = np.mean(deltas, axis=1)  # (k, t, x_new)
         b_all.append(b)
         n_all.append(n)
     b_all = np.stack(b_all, axis=0)  # (outer, k, t, x_new)
@@ -181,7 +180,7 @@ t_idx = 1
 x_new_idx = 2
 
 # geom spaced points
-n_tail_spec = np.rint(np.geomspace(n0 + 100, n0 + 1000, 100)).astype(int)
+n_tail_spec = np.rint(np.geomspace(n0 + 100, n0 + 1000, 30)).astype(int)
 n_head_spec = np.arange(n0, n0 + 100, 5) 
 n_all_spec = np.unique(np.concatenate([n_head_spec, n_tail_spec]))
 k_tail_spec = n_tail_spec - n0 - 1
@@ -192,19 +191,17 @@ k_tail_spec = n_tail_spec - n0 - 1
 # Power law for E[|b_n|]
 fig, axes = plt.subplots(1, 2, figsize=(10, 3))
 for n_est, ax in zip(n_est_list, axes):
-    outdir = utils.get_matching_dirs(id_dir, rf"quasi-simple.+n_est={n_est} .+fix=False")
+    outdir = utils.get_matching_dirs(id_dir, rf"quasi setup=gaussian-linear.+n_est={n_est} .+fix=True")
     assert len(outdir) == 1
     outdir = outdir[0]
     outer_dirs = utils.get_matching_dirs(outdir, r"outer-\d+")
-    b_all, n_all = get_bias_and_n(outer_dirs, n_tail_spec) # (outer, k, t, x_new)
+    b_all, n_all = get_bias_and_n(outer_dirs, n_tail_spec)
     outer0_delta0 = utils.read_from(
         utils.get_matching_files(outer_dirs[0], r"delta-\d+\.pickle")[0]
     )
     t = outer0_delta0["t"]
     x_new = outer0_delta0["x_new"]
     plot_power_law(ax, b_all[..., t_idx, x_new_idx], n_all[0, :])
-    for i in range(b_all.shape[0]):
-        ax.scatter(np.log(n_all[i, :]), np.log(np.abs(b_all[i, :, t_idx, x_new_idx])), alpha=0.1, s=1)
     ax.set_title(f"n_estimators={n_est}")
 
 # fig.suptitle(
@@ -218,7 +215,7 @@ fig.tight_layout()
 # Power law for |b_n|
 fig, axes = plt.subplots(1, 2, figsize=(10, 3))
 for n_est, ax in zip(n_est_list, axes):
-    outdir = utils.get_matching_dirs(id_dir, rf"quasi-simple.+n_est={n_est} .+fix=False")
+    outdir = utils.get_matching_dirs(id_dir, rf"quasi setup=gaussian-linear.+n_est={n_est} .+fix=True")
     assert len(outdir) == 1
     outdir = outdir[0]
     outer_dirs = utils.get_matching_dirs(outdir, r"outer-\d+")
@@ -259,7 +256,7 @@ fig.tight_layout()
 fig, axes = plt.subplots(1, 2, figsize=(10, 3))
 
 for n_est, ax in zip(n_est_list, axes):
-    outdir = utils.get_matching_dirs(id_dir, rf"quasi-simple.+n_est={n_est} .+fix=False")
+    outdir = utils.get_matching_dirs(id_dir, rf"quasi setup=gaussian-linear.+n_est={n_est} .+fix=True")
     assert len(outdir) == 1
     outdir = outdir[0]
     outer_dirs = utils.get_matching_dirs(outdir, r"outer-\d+")
@@ -281,14 +278,14 @@ for n_est, ax in zip(n_est_list, axes):
 #     f"Partial Sum of $E[|b_n|]$ (Trapezoidal Approx)\nx_new={x_new[x_new_idx]}, t={t[t_idx]}"
 # )
 fig.tight_layout()
-fig.savefig(f"{image_dir}/quasi-bias-partial-sum.pdf")
+# fig.savefig(f"{image_dir}/quasi-bias-partial-sum.pdf")
 
 # %%
 # Partial sum of \sqrt(n) E[|b_n|] with trapezoidal approximation
 fig, axes = plt.subplots(1, 2, figsize=(10, 3))
 
 for n_est, ax in zip(n_est_list, axes):
-    outdir = utils.get_matching_dirs(id_dir, rf"quasi-simple.+n_est={n_est} .+fix=False")
+    outdir = utils.get_matching_dirs(id_dir, rf"quasi setup=gaussian-linear.+n_est={n_est} .+fix=True")
     assert len(outdir) == 1
     outdir = outdir[0]
     outer_dirs = utils.get_matching_dirs(outdir, r"outer-\d+")
@@ -310,20 +307,20 @@ for n_est, ax in zip(n_est_list, axes):
 #     f"Partial Sum of $E[|b_n|]$ (Trapezoidal Approx)\nx_new={x_new[x_new_idx]}, t={t[t_idx]}"
 # )
 fig.tight_layout()
-fig.savefig(f"{image_dir}/quasi-weighted-bias-partial-sum.pdf")
+# fig.savefig(f"{image_dir}/quasi-weighted-bias-partial-sum.pdf")
 
 # %%
 ## Power law of \log E(\Delta_k^2 \mid Z{1:k-1}) of one outer rep
 fig, axes = plt.subplots(1, 2, figsize=(10, 3))
 for n_est, ax in zip(n_est_list, axes):
-    outdir = utils.get_matching_dirs(id_dir, rf"quasi-simple.+n_est={n_est} .+fix=False")
+    outdir = utils.get_matching_dirs(id_dir, rf"quasi setup=gaussian-linear.+n_est={n_est} .+fix=True")
     outdir = outdir[0]
     outer_dirs = utils.get_matching_dirs(outdir, r"outer-\d+")
 
     # use just the 0th rep
-    deltas, weights, n_tail = compile_outer(outer_dirs[0], n_tail_spec)  # (k, 8, t, x_new)
+    deltas, n_tail = compile_outer(outer_dirs[0], n_tail_spec)  # (k, mc_samples, t, x_new)
     log_delta2 = 2 * np.log(np.abs(deltas[..., t_idx, x_new_idx]))
-    log_Edelta2 = logsumexp(log_delta2, b=weights, axis=-1)
+    log_Edelta2 = logsumexp(log_delta2, axis=-1) - np.log(log_delta2.shape[-1])
     log_n = np.log(n_tail)
     slope, const, ci, rmse, r2 = fit_lm(log_n, log_Edelta2)
 
@@ -349,26 +346,26 @@ fig.tight_layout()
 ## Power law of \log E(\Delta_k^2 \mid Z{1:k-1}) of all reps
 fig, axes = plt.subplots(1, 2, figsize=(10, 3))
 for n_est, ax in zip(n_est_list, axes):
-    outdir = utils.get_matching_dirs(id_dir, rf"quasi-simple.+n_est={n_est} .+fix=False")
+    outdir = utils.get_matching_dirs(id_dir, rf"quasi setup=gaussian-linear.+n_est={n_est} .+fix=True")
     outdir = outdir[0]
     outer_dirs = utils.get_matching_dirs(outdir, r"outer-\d+")
 
     # use all reps
     deltas_all = []
-    weights_all = []
+    # weights_all = []
     n_all = []
     for od in outer_dirs:
-        deltas, weights, n_tail = compile_outer(od, n_tail_spec)  # (k, 8, t, x_new)
+        deltas, n_tail = compile_outer(od, n_tail_spec)  # (k, mc_samples, t, x_new)
         deltas_all.append(deltas)
-        weights_all.append(weights)
+        # weights_all.append(weights)
         n_all.append(n_tail)
 
-    deltas = np.stack(deltas_all, axis=0)  # (outer, k, 8, t, x_new)
-    weights = np.stack(weights_all, axis=0)  # (outer, k, 8, t, x_new)
+    deltas = np.stack(deltas_all, axis=0)  # (outer, k, mc_samples, t, x_new)
+    # weights = np.stack(weights_all, axis=0)  # (outer, k, 8, t, x_new)
     n_tail = np.stack(n_all, axis=0)  # (outer, k)
 
     log_delta2 = 2 * np.log(np.abs(deltas[..., t_idx, x_new_idx]))
-    log_Edelta2 = logsumexp(log_delta2, b=weights, axis=-1)
+    log_Edelta2 = logsumexp(log_delta2, axis=-1) - np.log(log_delta2.shape[-1])
     log_n = np.log(n_tail)
     slope, const, ci, rmse, r2 = fit_lm2(log_n, log_Edelta2)
 
@@ -398,15 +395,15 @@ fig.tight_layout()
 # Table of fit per rollout
 df_rows = []
 for n_est in n_est_list:
-    outdir = utils.get_matching_dirs(id_dir, rf"quasi-simple.+n_est={n_est} .+fix=False")
+    outdir = utils.get_matching_dirs(id_dir, rf"quasi setup=gaussian-linear.+n_est={n_est} .+fix=True")
     assert len(outdir) == 1
     outdir = outdir[0]
     outer_dirs = utils.get_matching_dirs(outdir, r"outer-\d+")
     assert len(outer_dirs) == 100
     for d in outer_dirs:
-        deltas, weights, n_tail = compile_outer(d, n_tail_spec)  # (k, 8, t, x_new)
-        delta2 = np.square(deltas)[..., t_idx, x_new_idx]  # (k, 8)
-        Edelta2 = np.sum(delta2 * weights, axis=1)  # (k, )
+        deltas, n_tail = compile_outer(d, n_tail_spec)  # (k, mc_samples, t, x_new)
+        delta2 = np.square(deltas)[..., t_idx, x_new_idx]  # (k, mc_samples)
+        Edelta2 = np.mean(delta2, axis=1)  # (k, )
         log_Edelta2 = np.log(Edelta2)
         log_n = np.log(n_tail)
         slope, const, ci, rmse, r2 = fit_lm(log_n, log_Edelta2)
@@ -436,7 +433,7 @@ for n_est, ax in zip(n_est_list, axes):
     ax.set_title(f"n_estimators={n_est}")
 
 fig.tight_layout()
-fig.savefig(f"{image_dir}/quasi-gamma-ci.pdf")
+# fig.savefig(f"{image_dir}/quasi-gamma-ci.pdf")
 
 # %%
 # Histogram of the slope per rollout
@@ -453,22 +450,22 @@ for n_est, ax in zip(n_est_list, axes):
     ax.legend()
 
 fig.tight_layout()
-fig.savefig(f"{image_dir}/quasi-gamma-histogram.pdf")
+# fig.savefig(f"{image_dir}/quasi-gamma-histogram.pdf")
 
 # %%
 # Plot of n^(fitted) * E[Delta^2_n]
 df_median = df.groupby("n_est").median()
 fig, axes = plt.subplots(1, 2, figsize=(10, 3))
 for n_est, ax in zip(n_est_list, axes):
-    outdir = utils.get_matching_dirs(id_dir, rf"quasi-simple.+n_est={n_est} ")
+    outdir = utils.get_matching_dirs(id_dir, rf"quasi setup=gaussian-linear.+n_est={n_est} .+fix=True")
     outdir = outdir[0]
     outer_dirs = utils.get_matching_dirs(outdir, r"outer-\d+")
     for d in outer_dirs:
-        deltas, weights, n_tail = compile_outer(d, n_tail_spec)  # (k, 8, t, x_new)
-        delta2 = np.square(deltas)[..., t_idx, x_new_idx]  # (k, 8)
+        deltas, n_tail = compile_outer(d, n_tail_spec)  # (k, mc_samples, t, x_new)
+        delta2 = np.square(deltas)[..., t_idx, x_new_idx]  # (k, mc_samples)
         fitted_power = df_median.loc[n_est, "slope"]
         factor = n_tail ** (-1 * fitted_power)
-        n2Edelta2 = factor * np.sum(delta2 * weights, axis=1)  # (k, )
+        n2Edelta2 = factor * np.mean(delta2, axis=1)  # (k, )
         ax.plot(n_tail, n2Edelta2, alpha=0.2)
         ax.set_yscale("log")
     ax.set_xlabel("n")
@@ -479,7 +476,7 @@ for n_est, ax in zip(n_est_list, axes):
 #     f"Power Law of E[|b_n|] with fitted normalising constant, x_new={x_new[x_new_idx]}, t={t[t_idx]}"
 # )
 fig.tight_layout()
-fig.savefig(f"{image_dir}/quasi-gamma-constant.pdf")
+# fig.savefig(f"{image_dir}/quasi-gamma-constant.pdf")
 # %%
 
 # %%

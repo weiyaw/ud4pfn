@@ -153,12 +153,12 @@ def run_single_outer_path(key, clf, t, x_new, x_init, y_init, n_points, save_pat
         utils.write_to(rollout_path, {"x": x_rollout, "y": y_rollout})
         logging.info(f"rollout: {timer() - start:.2f} secs")
 
+    start = timer()
     for n in n_points:
         delta_path = save_path / f"delta-{n}.pickle"
         if os.path.exists(delta_path):
             logging.info(f"delta-{n} exists")
         else:
-            start = timer()
             x_prev, y_prev = x_rollout[: n - 1], y_rollout[: n - 1]
             deltas_n, weights = compute_delta_and_weight(clf, t, x_new, x_prev, y_prev)
             assert deltas_n.shape == (8, t.shape[0], x_new.shape[0])
@@ -167,11 +167,11 @@ def run_single_outer_path(key, clf, t, x_new, x_init, y_init, n_points, save_pat
                 delta_path,
                 {"delta": deltas_n, "weight": weights, "x_new": x_new, "t": t, "n": n},
             )
-            if n // 50 == 0:
-                logging.info(f"delta-{n}: {timer() - start:.2f} secs")
+    logging.info(f"delta: {timer() - start:.2f} secs")
 
 
 def generate_initial_context(key_x, key_y, n0):
+    # Simple 1D logistic regression
     x_init = SUPPORT_X[jr.choice(key_x, len(SUPPORT_X), (n0,), p=PMF_X)]
     y_init = jr.bernoulli(key_y, expit(-0.5 + 2 * x_init))
     y_init = y_init.squeeze().astype(int)

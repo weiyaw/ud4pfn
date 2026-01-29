@@ -8,3 +8,5 @@ scikit-learn
 hydra-core
 statsmodels
 
+# visual
+matplotlib

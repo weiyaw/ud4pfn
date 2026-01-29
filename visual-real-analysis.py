@@ -62,15 +62,6 @@ axes[1].set_title(r"Simultaneous band with $V_n$")
 fig.tight_layout()
 fig.savefig("images/labour-force-vn.pdf")
 
-# clt_cov = compute_un(gn, gn_plus_1, n, type="simultaneous") / n
-# ci_band = build_simultaneous_band(gn, clt_cov)
-# plot_band(axes[2], x_grid, ci_band, x_prev)
-# axes[2].set_title(r"Simultaneous band with $U_n$")
-
-# clt_cov = compute_un(gn, gn_plus_1, n, type="pointwise") / n
-# ci_band = build_pointwise_band(gn, clt_cov)
-# plot_band(axes[3], x_grid, ci_band, x_prev)
-# axes[3].set_title(r"Pointwise band with $U_n$")
 
 # %%
 # Fibre strength
