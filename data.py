@@ -9,6 +9,7 @@ import jax.random as jr
 import numpy as np
 import pandas as pd
 from scipy.stats import gamma, norm, poisson
+from scipy.stats import qmc
 
 
 @dataclass
@@ -18,8 +19,27 @@ class Data:
     y: np.ndarray
     x_design: str
 
+    def __init__(
+        self, key: jax.random.key, n: int, shuffle: bool, x_design: str | None = None
+    ):
+        self.key = key
+        self.x_design = x_design
+        key_data, key_shuffle = jr.split(key)
+        self.X, self.y = self.get_xy(key_data, n)
+        self.X = np.asarray(self.X)
+        self.y = np.asarray(self.y)
+
+        if shuffle:
+            perm = jr.permutation(key_shuffle, self.X.shape[0])
+            self.X = self.X[perm]
+            self.y = self.y[perm]
+
     def __repr__(self) -> str:
         return f"{self.__class__.__name__}(key, X=np.ndarray{self.X.shape}, y=np.ndarray{self.y.shape}, x_design='{self.x_design}')"
+
+    @abstractmethod
+    def get_xy(self, key: jax.random.key, n: int) -> tuple[np.ndarray, np.ndarray]:
+        pass
 
     @abstractmethod
     def get_true_event(self, x: np.ndarray, t: float | int) -> np.ndarray:
@@ -28,18 +48,11 @@ class Data:
 
 
 class Data1D(Data):
-    def __init__(self, key: jax.random.key, n: int, shuffle: bool, x_design: str):
-        self.key = key
-        self.x_design = x_design
-        key_x, key_y, key_shuffle = jr.split(key, 3)
-        self.X = np.asarray(self.get_x(key_x, n, x_design))
-        # get y from subclass and compute true_curve separately via get_true_curve
-        self.y = self.get_y(key_y, self.X)
-
-        if shuffle:
-            perm = jr.permutation(key_shuffle, n)
-            self.X = self.X[perm]
-            self.y = self.y[perm]
+    def get_xy(self, key: jax.random.key, n: int) -> tuple[np.ndarray, np.ndarray]:
+        key_x, key_y = jr.split(key)
+        x = np.asarray(self.get_x(key_x, n, self.x_design))
+        y = self.get_y(key_y, x)
+        return x, y
 
     def get_x(self, key: jax.random.key, n: int, x_design: str) -> jax.Array:
         if x_design == "one-gap":
@@ -411,23 +424,6 @@ class LogisticLinear(Data1D):
 
 class Data2D(Data):
 
-    def __init__(
-        self, key: jax.random.key, n: int, shuffle: bool, x_design: str = None
-    ):
-        self.key = key
-        self.x_design = x_design
-        key_data, key_shuffle = jr.split(key)
-        self.X, self.y = self.get_x_and_y(key_data, n)
-
-        if shuffle:
-            perm = jr.permutation(key_shuffle, n)
-            self.X = self.X[perm]
-            self.y = self.y[perm]
-
-    @abstractmethod
-    def get_x_and_y(self, key: jax.random.key, n: int) -> tuple[np.ndarray, np.ndarray]:
-        pass
-
     def visualise(self, figsize=(8, 5)) -> None:
         # visualise data and true curve
         import matplotlib.pyplot as plt
@@ -499,7 +495,7 @@ class GaussianLinearSusan(Data2D):
         assert mean.shape == (x.shape[0],)
         return mean, noise_std
 
-    def get_x_and_y(self, key, n):
+    def get_xy(self, key, n):
         x = jr.uniform(key, shape=(n, 2), minval=0, maxval=1)
         # linear function plus constant Gaussian noise
         mean, noise_std = self._param(x)
@@ -512,6 +508,198 @@ class GaussianLinearSusan(Data2D):
         cdf = norm.cdf(t, loc=mean, scale=noise_std)
         assert cdf.shape == (x.shape[0],)
         return cdf.astype(float)
+
+
+class DataMultivariate(Data):
+    def __init__(
+        self, key: jax.random.key, n: int, shuffle: bool, x_design: str | None = None
+    ):
+        if x_design is None:
+            x_design = "sobol-2d"
+        if not x_design.startswith("sobol-"):
+            raise ValueError("x_design must be a Sobol design")
+        self.dim = int(x_design.split("-")[-1].replace("d", ""))
+        super().__init__(key, n, shuffle, x_design)
+
+    def _flatten_x(self, x: np.ndarray) -> tuple[np.ndarray, tuple[int, ...]]:
+        arr = np.asarray(x, dtype=np.float32)
+        assert arr.ndim >= 2 and arr.shape[-1] == self.dim
+        leading_shape = arr.shape[:-1]
+        return arr.reshape(-1, self.dim), leading_shape
+
+    def get_x(
+        self, key: jax.random.key, n: int, x_design: str | None = None
+    ) -> jax.Array:
+        seed = int(jr.randint(key, shape=(), minval=0, maxval=2_147_483_647))
+        sampler = qmc.Sobol(d=self.dim, scramble=True, rng=np.random.default_rng(seed))
+        x01 = sampler.random(n=n)
+        return jnp.asarray(2.0 * x01 - 1.0, dtype=jnp.float32)
+
+    def _weights(self, shift: int = 0) -> np.ndarray:
+        idx = np.arange(1, self.dim + 1, dtype=np.float32)
+        w = ((-1.0) ** idx) * idx
+        if shift != 0:
+            w = np.roll(w, shift)
+        return (w / np.linalg.norm(w)).astype(np.float32)
+
+
+class GaussianLinearMultivariate(DataMultivariate):
+    def _params(self, x: np.ndarray) -> tuple[np.ndarray, float]:
+        x_flat, _ = self._flatten_x(x)
+        mean = np.sqrt(1.5) * (x_flat @ self._weights(0)).astype(np.float32)
+        noise_std = float(np.sqrt(0.5))
+        return mean.astype(np.float32), noise_std
+
+    def get_xy(self, key, n):
+        key_x, key_y = jr.split(key)
+        x = self.get_x(key_x, n, self.x_design)
+        mean, noise_std = self._params(x)
+        y = mean + jr.normal(key_y, shape=(n,)) * noise_std
+        return np.asarray(x, dtype=np.float32), np.asarray(y, dtype=np.float32)
+
+    def get_true_event(self, x: np.ndarray, t: float) -> np.ndarray:
+        x_flat, leading_shape = self._flatten_x(x)
+        mean, noise_std = self._params(x_flat)
+        return (
+            norm.cdf(t, loc=mean, scale=noise_std)
+            .astype(np.float32)
+            .reshape(leading_shape)
+        )
+
+
+class GaussianLinearDependentErrorMultivariate(DataMultivariate):
+    def _params(self, x: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
+        x_flat, _ = self._flatten_x(x)
+        mean = np.sqrt(0.75) * (x_flat @ self._weights(0)).astype(np.float32)
+        driver = np.abs((x_flat @ self._weights(1)).astype(np.float32))
+        noise_std = 0.75 + 0.25 * driver
+        return mean.astype(np.float32), noise_std.astype(np.float32)
+
+    def get_xy(self, key, n):
+        key_x, key_y = jr.split(key)
+        x = self.get_x(key_x, n, self.x_design)
+        mean, noise_std = self._params(x)
+        y = mean + jr.normal(key_y, shape=(n,)) * noise_std
+        return np.asarray(x, dtype=np.float32), np.asarray(y, dtype=np.float32)
+
+    def get_true_event(self, x: np.ndarray, t: float) -> np.ndarray:
+        x_flat, leading_shape = self._flatten_x(x)
+        mean, noise_std = self._params(x_flat)
+        return (
+            norm.cdf(t, loc=mean, scale=noise_std)
+            .astype(np.float32)
+            .reshape(leading_shape)
+        )
+
+
+# class GaussianSineMultivariate(DataMultivariate):
+#     def _params(self, x: np.ndarray) -> tuple[np.ndarray, float]:
+#         x_flat, _ = self._flatten_x(x)
+#         phase = np.pi * (x_flat @ self._weights(0)).astype(np.float32)
+#         mean = 0.75 * np.sin(phase)
+#         noise_std = 0.85
+#         return mean.astype(np.float32), noise_std
+
+#     def get_xy(self, key, n):
+#         key_x, key_y = jr.split(key)
+#         x = self.get_x(key_x, n, self.x_design)
+#         mean, noise_std = self._params(x)
+#         y = mean + jr.normal(key_y, shape=(n,)) * noise_std
+#         return np.asarray(x, dtype=np.float32), np.asarray(y, dtype=np.float32)
+
+#     def get_true_event(self, x: np.ndarray, t: float) -> np.ndarray:
+#         x_flat, leading_shape = self._flatten_x(x)
+#         mean, noise_std = self._params(x_flat)
+#         return (
+#             norm.cdf(t, loc=mean, scale=noise_std)
+#             .astype(np.float32)
+#             .reshape(leading_shape)
+#         )
+
+
+class PoissonLinearMultivariate(DataMultivariate):
+    def _rate(self, x: np.ndarray) -> np.ndarray:
+        x_flat, _ = self._flatten_x(x)
+        rate = np.exp(0.5 * (x_flat @ self._weights(0)).astype(np.float32))
+        return np.clip(rate.astype(np.float32), 1e-3, None)
+
+    def get_xy(self, key, n):
+        key_x, key_y = jr.split(key)
+        x = self.get_x(key_x, n, self.x_design)
+        rate = self._rate(x)
+        counts = jr.poisson(key_y, rate).astype(np.float32)
+        y = (counts - rate) / np.sqrt(rate)
+        return np.asarray(x, dtype=np.float32), np.asarray(y, dtype=np.float32)
+
+    def get_true_event(self, x: np.ndarray, t: float) -> np.ndarray:
+        x_flat, leading_shape = self._flatten_x(x)
+        rate = self._rate(x_flat)
+        t_count = np.floor(t * np.sqrt(rate) + rate)
+        return poisson.cdf(t_count, rate).astype(np.float32).reshape(leading_shape)
+
+
+class ProbitMixtureMultivariate(DataMultivariate):
+    def _params(self, x: np.ndarray) -> np.ndarray:
+        x_flat, _ = self._flatten_x(x)
+        p1 = norm.cdf(1.4 * (x_flat @ self._weights(0)).astype(np.float32))
+        p2 = norm.cdf(1.4 * (x_flat @ self._weights(1)).astype(np.float32))
+        p = 0.5 * p1 + 0.5 * p2
+        return np.clip(p.astype(np.float32), 1e-4, 1 - 1e-4)
+
+    def get_xy(self, key, n):
+        key_x, key_y = jr.split(key)
+        x = self.get_x(key_x, n, self.x_design)
+        p = self._params(x)
+        y = np.where(jr.uniform(key_y, shape=(n,)) < p, 1, -1).astype(np.int32)
+        return np.asarray(x, dtype=np.float32), np.asarray(y, dtype=np.int32)
+
+    def get_true_event(self, x: np.ndarray, t: int | float) -> np.ndarray:
+        x_flat, leading_shape = self._flatten_x(x)
+        p = self._params(x_flat)
+        if np.isclose(t, 1):
+            ret = p
+        elif np.isclose(t, -1) or np.isclose(t, 0):
+            ret = 1.0 - p
+        else:
+            raise ValueError(
+                "t must be one of {-1, 0, 1} for ProbitMixtureMultivariate"
+            )
+        return ret.astype(np.float32).reshape(leading_shape)
+
+
+class CategoricalLinearMultivariate(DataMultivariate):
+    def _class_probs(self, x: np.ndarray) -> np.ndarray:
+        x_flat, _ = self._flatten_x(x)
+        p1 = (x_flat @ self._weights(0)).astype(np.float32)
+        p2 = (x_flat @ self._weights(1)).astype(np.float32)
+        logits = np.stack([1.2 * p1, -1.2 * p1, 1.2 * p2, -1.2 * p2], axis=1)
+        max_logits = np.max(logits, axis=1, keepdims=True)
+        exp_logits = np.exp(logits - max_logits)
+        return (exp_logits / np.sum(exp_logits, axis=1, keepdims=True)).astype(
+            np.float32
+        )
+
+    def get_xy(self, key, n):
+        key_x, key_sample = jr.split(key)
+        x = self.get_x(key_x, n, self.x_design)
+        probs = self._class_probs(x)
+        keys = jr.split(key_sample, n)
+
+        def sample_row(subkey, p):
+            return jr.choice(subkey, a=4, p=p)
+
+        cls = jax.vmap(sample_row)(keys, probs)
+        y = np.asarray(cls, dtype=np.int32)
+        return np.asarray(x, dtype=np.float32), y
+
+    def get_true_event(self, x: np.ndarray, t: int | float) -> np.ndarray:
+        x_flat, leading_shape = self._flatten_x(x)
+        probs = self._class_probs(x_flat)
+        if float(t).is_integer() and 0 <= int(t) <= 3:
+            idx = int(t)
+        else:
+            raise ValueError("t must be a class index in {0,1,2,3}")
+        return probs[:, idx].astype(np.float32).reshape(leading_shape)
 
 
 def make_moons(key, n, noise_std):
@@ -538,7 +726,7 @@ def make_moons(key, n, noise_std):
 
 
 class TwoMoons1(Data2D):
-    def get_x_and_y(self, key, n):
+    def get_xy(self, key, n):
         return make_moons(key, n, noise_std=0.1)
 
     def get_true_event(self, x: np.ndarray, t: float) -> np.ndarray:
@@ -546,7 +734,7 @@ class TwoMoons1(Data2D):
 
 
 class TwoMoons2(Data2D):
-    def get_x_and_y(self, key, n):
+    def get_xy(self, key, n):
         return make_moons(key, n, noise_std=0.4)
 
     def get_true_event(self, x: np.ndarray, t: float) -> np.ndarray:
@@ -554,7 +742,7 @@ class TwoMoons2(Data2D):
 
 
 class Spiral(Data2D):
-    def get_x_and_y(self, key, n):
+    def get_xy(self, key, n):
         n_arms = 3
         turns = 2
         radius = 4.0
