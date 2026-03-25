@@ -9,6 +9,7 @@ import jax.random as jr
 import numpy as np
 import torch
 from omegaconf import DictConfig, OmegaConf
+from scipy.stats import qmc
 
 import data
 import posterior
@@ -80,6 +81,12 @@ def main(cfg: DictConfig):
         else:
             x_grid = np.linspace(-10, 10, m).reshape(-1, 1)
         grid_shape = (x_grid.shape[0],)
+    elif d > 2 or (d == 2 and isinstance(setup, data.DataMultivariate)):
+        # Mirror DataMultivariate Sobol construction: scrambled Sobol in [-1, 1]^d.
+        sampler = qmc.Sobol(d=d, scramble=True, rng=np.random.default_rng(50194))
+        x01 = sampler.random(n=m)
+        x_grid = (2.0 * x01 - 1.0).astype(np.float32)
+        grid_shape = (x_grid.shape[0],)
     elif d == 2:
         if isinstance(setup, data.TwoMoons1):
             # same as Jayasekera et al 2025
@@ -95,8 +102,7 @@ def main(cfg: DictConfig):
         x1, x2 = np.meshgrid(lin1, lin2, indexing="ij")
         x_grid = np.stack([x1, x2], axis=-1).reshape(-1, 2)
         grid_shape = (len(lin1), len(lin2))
-    else:
-        raise ValueError(f"Unsupported dimension d={d}")
+
     t = np.array(T_MAP[setup_name])
 
     logging.info(f"Saving outputs to {savedir}")
