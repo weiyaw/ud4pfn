@@ -1,0 +1,11 @@
+.DS_Store
+.dir-locals.el
+__pycache__/
+*.pyc
+*.log
+
+slurm-log/
+outputs/
+.vscode/
+tabpfn-model/
+susan/

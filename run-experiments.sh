@@ -15,11 +15,12 @@ done
 
 
 # coverage (multivariate)
-for seed in $(seq 1000 1099); do
-    for setup in gaussian-linear-multivariate gaussian-linear-dependent-error-multivariate poisson-linear-multivariate probit-mixture-multivariate categorical-linear-multivariate; do
-        for data_size in 200 500; do
-            for x_design in "sobol-2d" "sobol-10d"; do
-            python run-ghat.py id="2026-01-23" setup="$setup" n_estimators=64 x_design="$x_design" seed=$seed data_size=$data_size
+for seed in $(seq 1000 1019); do
+    for setup in gaussian-linear-multivariate poisson-linear-multivariate probit-mixture-multivariate categorical-linear-multivariate; do
+        for data_size in 200 500 1000; do
+            for x_design in "sobol-10d"; do
+                python run-ghat.py id="2026-01-23" setup="$setup" n_estimators=16 x_design="$x_design" seed=$seed data_size=$data_size
+            done
         done
     done
 done
@@ -39,17 +40,20 @@ python run-real-analysis.py id="2026-01-51" setup="labour-force" n_estimators=64
 python run-real-analysis.py id="2026-01-51" setup="fibre-strength" n_estimators=64 seed=1000
 
 
-# entropic uncertainty decomposition
+# entropic uncertainty decomposition (varying x^star)
 for data_size in 15 50 75 150; do
     python run-ghat.py id="2026-01-61" setup=logistic-linear n_estimators=64 x_design="gaussian:1.5:3.0" data_size=$data_size fix_data=True seed=1000
 done
 
+
+# entropic uncertainty decomposition (2D and 3D examples)
 python run-ghat.py id="2026-01-61" setup=two-moons-1 n_estimators=64 x_design=None data_size=30 fix_data=False seed=1000
 python run-ghat.py id="2026-01-61" setup=two-moons-2 n_estimators=64 x_design=None data_size=30 fix_data=False seed=1000
 python run-ghat.py id="2026-01-61" setup=two-moons-1 n_estimators=64 x_design=None data_size=100 fix_data=False seed=1000
 python run-ghat.py id="2026-01-61" setup=two-moons-2 n_estimators=64 x_design=None data_size=100 fix_data=False seed=1000
 python run-ghat.py id="2026-01-61" setup=spiral n_estimators=64 x_design=None data_size=200 fix_data=False seed=1000
 
+# entropic uncertainty decomposition (varying number of data size)
 for seed in $(seq 1000 1049); do
     for data_size in $(seq 75 5 200); do
         python run-ghat.py id="2026-01-62" setup=logistic-linear n_estimators=64 x_design="gaussian:1.5:3.0" data_size=$data_size fix_data=False mc_samples=0 seed=$seed
