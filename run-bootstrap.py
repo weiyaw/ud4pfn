@@ -69,7 +69,7 @@ def compute_bootstrap_predictions(
 
 
 def save_bootstrap_samples_for_rep(rep_dir: str, cfg: DictConfig) -> None:
-    outpath = f"{rep_dir}/bootstrap_samples.pickle"
+    outpath = f"{rep_dir}/bootstrap-{cfg.bootstrap_samples}.pickle"
     if os.path.exists(outpath) and not bool(cfg.overwrite):
         logging.info(f"Skipping existing {outpath}")
         return
@@ -82,7 +82,7 @@ def save_bootstrap_samples_for_rep(rep_dir: str, cfg: DictConfig) -> None:
 
     clf = get_clf(setup_name, n_estimators)
 
-    logging.info(f"Computing bootstrap samples for {rep_dir}.")
+    logging.info(f"Computing {cfg.bootstrap_samples} bootstrap samples for {rep_dir}.")
     start = timer()
     bootstrap_preds = compute_bootstrap_predictions(
         clf=clf,
@@ -94,7 +94,6 @@ def save_bootstrap_samples_for_rep(rep_dir: str, cfg: DictConfig) -> None:
         seed=seed + int(cfg.seed_offset),
     )
     elapsed = timer() - start
-    logging.info(f"Computed {cfg.bootstrap_samples} bootstrap samples in {elapsed:.2f}s")
     utils.write_to_local(
         outpath,
         {
