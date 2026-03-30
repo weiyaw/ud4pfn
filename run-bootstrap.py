@@ -82,6 +82,7 @@ def save_bootstrap_samples_for_rep(rep_dir: str, cfg: DictConfig) -> None:
 
     clf = get_clf(setup_name, n_estimators)
 
+    logging.info(f"Computing bootstrap samples for {rep_dir}.")
     start = timer()
     bootstrap_preds = compute_bootstrap_predictions(
         clf=clf,
@@ -92,8 +93,8 @@ def save_bootstrap_samples_for_rep(rep_dir: str, cfg: DictConfig) -> None:
         n_bootstrap=int(cfg.bootstrap_samples),
         seed=seed + int(cfg.seed_offset),
     )
-
     elapsed = timer() - start
+    logging.info(f"Computed {cfg.bootstrap_samples} bootstrap samples in {elapsed:.2f}s")
     utils.write_to_local(
         outpath,
         {
@@ -117,11 +118,7 @@ def main(cfg: DictConfig):
         raise FileNotFoundError(f"Output id directory not found: {base_dir}")
 
     rep_dirs = utils.get_matching_dirs(base_dir, cfg.include_regex)
-    rep_dirs = [
-        d
-        for d in rep_dirs
-        if os.path.exists(f"{d}/data.pickle") and os.path.exists(f"{d}/gn.pickle")
-    ]
+    rep_dirs = [d for d in rep_dirs if os.path.exists(f"{d}/data.pickle")]
     rep_dirs.sort()
 
     if not rep_dirs:
