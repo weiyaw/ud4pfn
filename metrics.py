@@ -75,6 +75,86 @@ def build_simultaneous_band(mean, cov, alpha: float = 0.05):
     }
 
 
+def build_bootstrap_pointwise_band(mean, bootstrap_samples, alpha: float = 0.05):
+    """
+    Percentile bootstrap pointwise interval.
+
+    Parameters
+    ----------
+    mean : (m,) ndarray
+        Base predictions computed on the original dataset.
+    bootstrap_samples : (B, m) ndarray
+        Bootstrap predictions across B bootstrap resamples.
+    alpha : float
+        Miscoverage level.
+    """
+    mean = np.asarray(mean)
+    bootstrap_samples = np.asarray(bootstrap_samples)
+    assert mean.ndim == 1
+    assert bootstrap_samples.ndim == 2
+    assert bootstrap_samples.shape[1] == mean.shape[0]
+
+    lower = np.quantile(bootstrap_samples, alpha / 2, axis=0)
+    upper = np.quantile(bootstrap_samples, 1 - alpha / 2, axis=0)
+    lower = np.clip(lower, 0.0, 1.0)
+    upper = np.clip(upper, 0.0, 1.0)
+    width = np.mean(upper - lower)
+
+    return {
+        "mean": mean,
+        "lower": lower,
+        "upper": upper,
+        "width": width,
+    }
+
+
+def build_bootstrap_simultaneous_band(
+    mean,
+    bootstrap_samples,
+    alpha: float = 0.05,
+    studentize: bool = False,
+    eps: float = 1e-12,
+):
+    """
+    Sup-norm bootstrap simultaneous band.
+
+    If ``studentize`` is True, uses sup-t style studentization by dividing
+    pointwise deviations with bootstrap standard errors.
+    """
+    mean = np.asarray(mean)
+    bootstrap_samples = np.asarray(bootstrap_samples)
+    assert mean.ndim == 1
+    assert bootstrap_samples.ndim == 2
+    assert bootstrap_samples.shape[1] == mean.shape[0]
+
+    diff = bootstrap_samples - mean[None, :]
+
+    if studentize:
+        se = np.std(bootstrap_samples, axis=0, ddof=1)
+        se = np.maximum(se, eps)
+        max_dev = np.max(np.abs(diff) / se[None, :], axis=1)
+        c_alpha = np.quantile(max_dev, 1 - alpha)
+        delta = c_alpha * se
+    else:
+        max_dev = np.max(np.abs(diff), axis=1)
+        c_alpha = np.quantile(max_dev, 1 - alpha)
+        se = None
+        delta = c_alpha
+
+    lower = np.clip(mean - delta, 0.0, 1.0)
+    upper = np.clip(mean + delta, 0.0, 1.0)
+    width = np.mean(upper - lower)
+
+    return {
+        "mean": mean,
+        "lower": lower,
+        "upper": upper,
+        "c_alpha": c_alpha,
+        "se": se,
+        "width": width,
+    }
+
+
 def compute_ellipsoid_log_volume(cov, radius):
     # compute log of the volume of a high-dimensional ellipsoid defined by radius^2 > x^T cov^{-1} x
     d = cov.shape[0]
