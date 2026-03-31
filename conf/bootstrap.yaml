@@ -1,9 +1,7 @@
 defaults:
   - _self_
 
-id: ${now:%Y-%m-%d}
-outputs_root: "./outputs"
-include_regex: ".+"
+rep_dir: null  # path to the rep_dir to process
 bootstrap_samples: 1000
 seed_offset: 10391
 overwrite: false
@@ -13,8 +11,4 @@ git: ${githash:}
 
 hydra:
   run:
-    dir: "${outputs_root}/${id}"
-
-  sweep:
-    dir: ${hydra.run.dir}
-    subdir: .
+    dir: "${rep_dir}"

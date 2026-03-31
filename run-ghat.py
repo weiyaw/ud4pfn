@@ -20,6 +20,50 @@ from pred_rule import TabPFNClassifierPPD, TabPFNRegressorPPD
 os.environ["TABPFN_DISABLE_TELEMETRY"] = "1"
 
 
+def create_x_grid(setup, m, d):
+    """Create x_grid and grid_shape based on data dimensionality and setup.
+    
+    Args:
+        setup: Data setup object
+        m: Grid size (x_grid_size)
+        d: Dimensionality of data
+        
+    Returns:
+        x_grid: Grid points as numpy array
+        grid_shape: Shape of the grid for visualization
+    """
+    if d == 1:
+        if isinstance(setup, data.LogisticLinear):
+            # same as Jayasekera et al 2025
+            x_grid = np.linspace(-15.0, 15.0, 151).reshape(-1, 1)
+        else:
+            x_grid = np.linspace(-10, 10, m).reshape(-1, 1)
+        grid_shape = (x_grid.shape[0],)
+    elif d > 2 or (d == 2 and isinstance(setup, data.DataMultivariate)):
+        # Mirror DataMultivariate Sobol construction: scrambled Sobol in [-1, 1]^d.
+        sampler = qmc.Sobol(d=d, scramble=True, rng=np.random.default_rng(50194))
+        x01 = sampler.random(n=m)
+        x_grid = (2.0 * x01 - 1.0).astype(np.float32)
+        grid_shape = (x_grid.shape[0],)
+    elif d == 2:
+        if isinstance(setup, data.TwoMoons1):
+            # same as Jayasekera et al 2025
+            lin1 = np.linspace(-1.5, 2.6, m)
+            lin2 = np.linspace(-1.5, 2.6, m)
+        elif isinstance(setup, data.TwoMoons2):
+            # same as Jayasekera et al 2025
+            lin1 = np.linspace(-3.0, 3.6, m)
+            lin2 = np.linspace(-2.5, 3.1, m)
+        else:
+            lin1 = np.linspace(-4.0, 4.0, m)
+            lin2 = np.linspace(-4.0, 4.0, m)
+        x1, x2 = np.meshgrid(lin1, lin2, indexing="ij")
+        x_grid = np.stack([x1, x2], axis=-1).reshape(-1, 2)
+        grid_shape = (len(lin1), len(lin2))
+    
+    return x_grid, grid_shape
+
+
 @hydra.main(version_base=None, config_path="conf", config_name="ghat")
 def main(cfg: DictConfig):
     OmegaConf.resolve(cfg)
@@ -74,34 +118,7 @@ def main(cfg: DictConfig):
     x_prev = setup.X
     y_prev = setup.y
     d = x_prev.shape[1]
-    if d == 1:
-        if isinstance(setup, data.LogisticLinear):
-            # same as Jayasekera et al 2025
-            x_grid = np.linspace(-15.0, 15.0, 151).reshape(-1, 1)
-        else:
-            x_grid = np.linspace(-10, 10, m).reshape(-1, 1)
-        grid_shape = (x_grid.shape[0],)
-    elif d > 2 or (d == 2 and isinstance(setup, data.DataMultivariate)):
-        # Mirror DataMultivariate Sobol construction: scrambled Sobol in [-1, 1]^d.
-        sampler = qmc.Sobol(d=d, scramble=True, rng=np.random.default_rng(50194))
-        x01 = sampler.random(n=m)
-        x_grid = (2.0 * x01 - 1.0).astype(np.float32)
-        grid_shape = (x_grid.shape[0],)
-    elif d == 2:
-        if isinstance(setup, data.TwoMoons1):
-            # same as Jayasekera et al 2025
-            lin1 = np.linspace(-1.5, 2.6, m)
-            lin2 = np.linspace(-1.5, 2.6, m)
-        elif isinstance(setup, data.TwoMoons2):
-            # same as Jayasekera et al 2025
-            lin1 = np.linspace(-3.0, 3.6, m)
-            lin2 = np.linspace(-2.5, 3.1, m)
-        else:
-            lin1 = np.linspace(-4.0, 4.0, m)
-            lin2 = np.linspace(-4.0, 4.0, m)
-        x1, x2 = np.meshgrid(lin1, lin2, indexing="ij")
-        x_grid = np.stack([x1, x2], axis=-1).reshape(-1, 2)
-        grid_shape = (len(lin1), len(lin2))
+    x_grid, grid_shape = create_x_grid(setup, m, d)
 
     t = np.array(T_MAP[setup_name])
 
@@ -125,14 +142,14 @@ def main(cfg: DictConfig):
     )
 
     start = timer()
-    g0_to_gn = posterior.compute_g0_to_gn(clf, t, x_grid, x_prev, y_prev)
-    utils.write_to_local(f"{savedir}/g0_to_gn.pickle", g0_to_gn)
-    logging.info(f"Built g0_to_gn in {timer() - start:.2f} seconds")
-
-    start = timer()
     gn = posterior.compute_gn(clf, t, x_grid, x_prev, y_prev)
     utils.write_to_local(f"{savedir}/gn.pickle", gn)
     logging.info(f"Built gn in {timer() - start:.2f} seconds")
+
+    start = timer()
+    g0_to_gn = posterior.compute_g0_to_gn(clf, t, x_grid, x_prev, y_prev)
+    utils.write_to_local(f"{savedir}/g0_to_gn.pickle", g0_to_gn)
+    logging.info(f"Built g0_to_gn in {timer() - start:.2f} seconds")
 
     if mc_samples > 0:
         start = timer()

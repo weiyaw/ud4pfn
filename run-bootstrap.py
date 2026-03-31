@@ -112,20 +112,14 @@ def main(cfg: DictConfig):
     logging.info(f"Hydra version: {hydra.__version__}")
     logging.info(OmegaConf.to_yaml(cfg))
 
-    base_dir = os.path.join(cfg.outputs_root, cfg.id)
-    if not os.path.exists(base_dir):
-        raise FileNotFoundError(f"Output id directory not found: {base_dir}")
+    rep_dir = cfg.rep_dir
+    if not os.path.exists(rep_dir):
+        raise FileNotFoundError(f"Repetition directory not found: {rep_dir}")
+    
+    if not os.path.exists(f"{rep_dir}/data.pickle"):
+        raise FileNotFoundError(f"data.pickle not found in {rep_dir}")
 
-    rep_dirs = utils.get_matching_dirs(base_dir, cfg.include_regex)
-    rep_dirs = [d for d in rep_dirs if os.path.exists(f"{d}/data.pickle")]
-    rep_dirs.sort()
-
-    if not rep_dirs:
-        raise RuntimeError(f"No repetition directories found in {base_dir}")
-
-    logging.info(f"Computing bootstrap samples for {len(rep_dirs)} runs")
-    for rep_dir in rep_dirs:
-        save_bootstrap_samples_for_rep(rep_dir, cfg)
+    save_bootstrap_samples_for_rep(rep_dir, cfg)
 
 
 if __name__ == "__main__":

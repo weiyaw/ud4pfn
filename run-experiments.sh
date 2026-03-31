@@ -14,8 +14,18 @@ for seed in $(seq 1000 1099); do
 done
 
 
-# coverage (multivariate)
-for seed in $(seq 1000 1019); do
+# coverage (n_est=16)
+for seed in $(seq 1000 1099); do
+    for setup in gaussian-linear gaussian-polynomial gaussian-linear-dependent-error gaussian-sine poisson-linear probit-mixture categorical-linear; do
+        for data_size in 200 500 1000; do
+            python run-ghat.py id="2026-01-22" setup="$setup" n_estimators=16 x_design="uniform-1d" seed=$seed data_size=$data_size
+        done
+    done
+done
+
+
+# coverage (multivariate, n_est=16)
+for seed in $(seq 1000 1049); do
     for setup in gaussian-linear-multivariate gaussian-linear-dependent-error poisson-linear-multivariate probit-mixture-multivariate categorical-linear-multivariate; do
         for data_size in 200 500 1000; do
             for x_design in "sobol-10d"; do
@@ -27,8 +37,13 @@ done
 
 
 # bootstrap samples for coverage (required by visual-coverage.py)
-python run-bootstrap.py id="2026-01-22" bootstrap_samples=1000
-python run-bootstrap.py id="2026-01-23" bootstrap_samples=1000
+for rep_dir in outputs/2026-01-22/*/; do
+    python run-bootstrap.py rep_dir="$rep_dir" bootstrap_samples=200
+done
+
+for rep_dir in outputs/2026-01-23/*/; do
+    python run-bootstrap.py rep_dir="$rep_dir" bootstrap_samples=200
+done
 
 
 # gap
