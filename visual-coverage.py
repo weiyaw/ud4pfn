@@ -4,6 +4,7 @@ import os
 
 import numpy as np
 import pandas as pd
+import tabulate
 from tqdm.auto import tqdm
 
 import utils
@@ -70,6 +71,8 @@ def get_metrics(rep_dirs: list[str], data, t_idx, alpha=0.05):
     un_point_bands = []
     boot_simul_bands = []
     boot_point_bands = []
+    copula_simul_bands = []
+    copula_point_bands = []
     for g0_to_gn, gn, gn_plus_1 in zip(g0_to_gn_all_rep, gn_all_rep, gn_plus_1_all_rep):
         clt_cov = compute_vn(g0_to_gn, type="simultaneous") / n
         vn_simul_bands.append(build_simultaneous_band(gn, clt_cov, alpha=alpha))
@@ -84,9 +87,10 @@ def get_metrics(rep_dirs: list[str], data, t_idx, alpha=0.05):
         un_point_bands.append(build_pointwise_band(gn, clt_cov, alpha=alpha))
 
     for outdir, gn in zip(rep_dirs, gn_all_rep):
-        path = f"{outdir}/bootstrap_samples.pickle"
+        path = f"{outdir}/bootstrap-200.pickle"
         if not os.path.exists(path):
-            raise RuntimeError(f"Missing bootstrap artifact: {path}")
+            break
+            # raise RuntimeError(f"Missing bootstrap artifact: {path}")
         artifact = utils.read_from(path)
         bootstrap_preds_all_t = artifact["predictions"]
         bootstrap_preds = bootstrap_preds_all_t[:, t_idx, :]
@@ -97,6 +101,16 @@ def get_metrics(rep_dirs: list[str], data, t_idx, alpha=0.05):
         boot_simul_bands.append(
             build_bootstrap_simultaneous_band(gn, bootstrap_preds, alpha=alpha)
         )
+
+    for outdir in rep_dirs:
+        path = f"{outdir}/copula-200-1000.pickle"
+        if not os.path.exists(path):
+            break
+        artifact = utils.read_from(path)
+        cdf_samples = np.exp(artifact["logcdf"][:, t_idx, :])  # (B, x_grid)
+        mean = cdf_samples.mean(axis=0)
+        copula_point_bands.append(build_bootstrap_pointwise_band(mean, cdf_samples, alpha=alpha))
+        copula_simul_bands.append(build_bootstrap_simultaneous_band(mean, cdf_samples, alpha=alpha))
 
     # Compute the coverage
     out = {
@@ -115,6 +129,13 @@ def get_metrics(rep_dirs: list[str], data, t_idx, alpha=0.05):
         "boot_simul_width": np.mean([b["width"] for b in boot_simul_bands]),
         "boot_point": compute_pointwise_coverage(true_prob, boot_point_bands),
         "boot_point_width": np.mean([b["width"] for b in boot_point_bands]),
+    }
+
+    out |= {
+        "copula_simul": compute_simultaneous_coverage(true_prob, copula_simul_bands),
+        "copula_simul_width": np.mean([b["width"] for b in copula_simul_bands]) if copula_simul_bands else np.nan,
+        "copula_point": compute_pointwise_coverage(true_prob, copula_point_bands),
+        "copula_point_width": np.mean([b["width"] for b in copula_point_bands]) if copula_point_bands else np.nan,
     }
 
     return out
@@ -141,6 +162,7 @@ def get_df(all_dirs: list[str], alpha: float = 0.05) -> pd.DataFrame:
 
 # %%
 
+# Scalar x
 id_dir = "../outputs/2026-01-22/" # (coverage for scalar x)
 image_dir = "../paper/images"
 
@@ -152,12 +174,15 @@ for n in [200, 500, 1000]:
     dfs20.append(get_df(all_dirs, alpha=0.20))
 
 dfs05 = pd.concat(dfs05).sort_values(by=["setup", "n"]).reset_index(drop=True)
+print(dfs05.to_markdown(index=False))
 dfs20 = pd.concat(dfs20).sort_values(by=["setup", "n"]).reset_index(drop=True)
+print(dfs20.to_markdown(index=False))
 
 
 
 # %%
 
+# Multivariate x
 id_dir = "../outputs/2026-01-23/" # (coverage for multivariate x)
 # image_dir = "../paper/images"
 
@@ -169,7 +194,9 @@ for n in [200, 500, 1000]:
     dfs20.append(get_df(all_dirs, alpha=0.20))
 
 dfs05 = pd.concat(dfs05).sort_values(by=["setup", "n"]).reset_index(drop=True)
+print(dfs05.to_markdown(index=False))
 dfs20 = pd.concat(dfs20).sort_values(by=["setup", "n"]).reset_index(drop=True)
+print(dfs20.to_markdown(index=False))
 
 
 # %%

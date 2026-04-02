@@ -93,6 +93,7 @@ def save_bootstrap_samples_for_rep(rep_dir: str, cfg: DictConfig) -> None:
         n_bootstrap=int(cfg.bootstrap_samples),
         seed=seed + int(cfg.seed_offset),
     )
+    # bootstrap_preds: (bootstrap_samples, num of t grid, num of x_grid)
     elapsed = timer() - start
     utils.write_to_local(
         outpath,

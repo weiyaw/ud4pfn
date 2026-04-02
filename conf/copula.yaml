@@ -1,0 +1,15 @@
+defaults:
+  - _self_
+
+rep_dir: null  # path to the rep_dir to process
+rollout_times: 200
+rollout_length: 1000
+seed: 29427
+overwrite: false
+
+lastrun: ${now:%Y-%m-%dT%H:%M:%S%z}
+git: ${githash:}
+
+hydra:
+  run:
+    dir: "${rep_dir}"
