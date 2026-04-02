@@ -18,7 +18,7 @@ done
 for seed in $(seq 1000 1099); do
     for setup in gaussian-linear gaussian-polynomial gaussian-linear-dependent-error gaussian-sine poisson-linear probit-mixture categorical-linear; do
         for data_size in 200 500 1000; do
-            python run-ghat.py id="2026-01-22" setup="$setup" n_estimators=16 x_design="uniform-1d" seed=$seed data_size=$data_size
+            python run-ghat.py id="2026-01-23" setup="$setup" n_estimators=16 x_design="uniform-1d" seed=$seed data_size=$data_size
         done
     done
 done

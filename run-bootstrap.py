@@ -1,6 +1,5 @@
 import logging
 import os
-import re
 from timeit import default_timer as timer
 
 import hydra
@@ -13,13 +12,6 @@ from constants import CLASSIFICATION, REGRESSION
 from pred_rule import TabPFNClassifierPPD, TabPFNRegressorPPD
 
 os.environ["TABPFN_DISABLE_TELEMETRY"] = "1"
-
-
-def parse_from_outdir(outdir: str, key: str) -> str:
-    match = re.search(rf"{key}=([^\s]+)", outdir)
-    if not match:
-        raise ValueError(f"Could not parse '{key}' from outdir: {outdir}")
-    return match.group(1)
 
 
 def get_clf(setup_name: str, n_estimators: int):
@@ -76,9 +68,9 @@ def save_bootstrap_samples_for_rep(rep_dir: str, cfg: DictConfig) -> None:
 
     rep_data = utils.read_from(f"{rep_dir}/data.pickle")
 
-    setup_name = parse_from_outdir(rep_dir, "setup")
-    n_estimators = int(parse_from_outdir(rep_dir, "n_est"))
-    seed = int(parse_from_outdir(rep_dir, "seed"))
+    setup_name = utils.parse_from_path(rep_dir, "setup")
+    n_estimators = int(utils.parse_from_path(rep_dir, "n_est"))
+    seed = int(utils.parse_from_path(rep_dir, "seed"))
 
     clf = get_clf(setup_name, n_estimators)
 

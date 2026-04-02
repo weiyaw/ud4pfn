@@ -82,14 +82,14 @@ def _tabpfn_init_cregression(
     y_train: ArrayLike,
     x_test: ArrayLike,
     y_test: ArrayLike,
+    n_estimators: int,
 ):
 
     regressor = TabPFNRegressorPPD(
-        n_estimators=16,
+        n_estimators=n_estimators,
         softmax_temperature=1.0,
         fit_mode="low_memory",
         model_path="tabpfn-model/tabpfn-v2.5-regressor-v2.5_default.ckpt",
-        device="cpu",
     )
     regressor.fit(np.asarray(x_train), np.asarray(y_train))
 
@@ -103,11 +103,13 @@ def _tabpfn_init_cregression(
 
     bardist = pred_output["criterion"]
     logits = pred_output["logits"]
-    bardist.borders = bardist.borders.cpu()
+    bardist.borders = bardist.borders.to(logits.device)
 
-    y_test_torch = torch.tensor(np.asarray(y_test), dtype=torch.float32)[:, None]
-    logcdf = np.log(bardist.cdf(logits, y_test_torch))
-    logpdf = np.log(bardist.pdf(logits, y_test_torch))
+    y_test = torch.as_tensor(
+        np.asarray(y_test), dtype=logits.dtype, device=logits.device
+    )[:, None]
+    logcdf = torch.log(bardist.cdf(logits, y_test)).detach().cpu().numpy()
+    logpdf = torch.log(bardist.pdf(logits, y_test)).detach().cpu().numpy()
 
     return (
         jnp.asarray(logcdf, dtype=jnp.float64),
@@ -122,6 +124,7 @@ def copula_regression(
     rollout_length: int,
     x_grid: ArrayLike,
     t_grid: ArrayLike,
+    n_estimators: int,
 ) -> tuple[ArrayLike, Any]:
 
     # Return logcdf which is log P_N(y < t_grid | x_grid) with shape
@@ -137,7 +140,11 @@ def copula_regression(
     logging.info("Preq loglik is {}".format(copula_cregression_obj.preq_loglik / n))
 
     logcdf_init, logpdf_init = _tabpfn_init_cregression(
-        x_prev, y_prev, x_mesh_flat, t_mesh_flat
+        x_prev,
+        y_prev,
+        x_mesh_flat,
+        t_mesh_flat,
+        n_estimators=n_estimators,
     )
 
     logcdf, _ = _predictive_resample_cregression_with_init(
@@ -171,6 +178,7 @@ def save_copula_samples_for_rep(rep_dir: str, cfg: DictConfig) -> None:
         return
 
     rep_data = utils.read_from(f"{rep_dir}/data.pickle")
+    n_estimators = int(utils.parse_from_path(rep_dir, "n_est"))
 
     logging.info(f"Computing copula regression for {rep_dir}.")
     start = timer()
@@ -181,6 +189,7 @@ def save_copula_samples_for_rep(rep_dir: str, cfg: DictConfig) -> None:
         rollout_length=int(cfg.rollout_length),
         x_grid=rep_data["x_grid"],
         t_grid=rep_data["t"],
+        n_estimators=n_estimators,
     )
     # logcdf: (rollout_times, t_grid.shape[0], x_grid.shape[0])
     elapsed = timer() - start

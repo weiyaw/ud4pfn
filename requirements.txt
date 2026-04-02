@@ -1,6 +1,6 @@
 tabpfn==6.2.0
 torch==2.9.0
-jax
+jax[cuda]
 numpy
 scipy
 pandas

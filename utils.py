@@ -38,6 +38,13 @@ def read_from(path):
     return read_from_local(path)
 
 
+def parse_from_path(path: str, key: str) -> str:
+    match = re.search(rf"{key}=([^\s]+)", path)
+    if not match:
+        raise ValueError(f"Could not parse '{key}' from path: {path}")
+    return match.group(1)
+
+
 def camel_to_kebab(s: str) -> str:
     """Convert CamelCase or camelCase to kebab-case (lowercase with hyphens)."""
     if not s:
