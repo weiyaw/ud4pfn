@@ -48,38 +48,40 @@ def fit_copula_cregression(
         x_perm_opt = x_perm[0:n_perm_optim]
 
     # Compiling
-    # logging.info('Compiling...')
-    # start = time.time()
-    # temp = mvcr.fun_ccll_perm_sp(hyperparam_init,y_perm_opt,x_perm_opt)
-    # temp = mvcr.grad_ccll_perm_sp(hyperparam_init,y_perm_opt,x_perm_opt)
-    # temp = mvcr.update_pn_loop_perm(hyperparam_init[0],hyperparam_init[1:],y_perm,x_perm)[0].block_until_ready()
-    # end = time.time()
-    # logging.info('Compilation time: {}s'.format(round(end-start, 3)))
+    logging.info('Compiling...')
+    start = time.time()
+    temp = mvcr.fun_ccll_perm_sp(hyperparam_init,y_perm_opt,x_perm_opt)
+    temp = mvcr.grad_ccll_perm_sp(hyperparam_init,y_perm_opt,x_perm_opt)
+    temp = mvcr.update_pn_loop_perm(hyperparam_init[0],hyperparam_init[1:],y_perm,x_perm)[0].block_until_ready()
+    end = time.time()
+    logging.info('Compilation time: {}s'.format(round(end-start, 3)))
 
-    # logging.info("Optimizing...")
-    # start = time.time()
-    # # Condit preq loglik
-    # opt = minimize(
-    #     fun=mvcr.fun_ccll_perm_sp,
-    #     x0=hyperparam_init,
-    #     args=(y_perm_opt, x_perm_opt),
-    #     jac=mvcr.grad_ccll_perm_sp,
-    #     method="L-BFGS-B",
-    #     options={"maxiter": 100, "ftol": 1e-4},
-    # )
-    # # check optimization succeeded
-    # if opt.success == False:
-    #     logging.info("Optimization failed")
+    logging.info("Optimizing...")
+    start = time.time()
+    # Condit preq loglik
+    opt = minimize(
+        fun=mvcr.fun_ccll_perm_sp,
+        x0=hyperparam_init,
+        args=(y_perm_opt, x_perm_opt),
+        jac=mvcr.grad_ccll_perm_sp,
+        method="L-BFGS-B",
+        options={"maxiter": 100, "ftol": 1e-4},
+    )
+    # check optimization succeeded
+    if opt.success == False:
+        logging.info("Optimization failed")
 
     # unscale hyperparameter
-    # hyperparam_opt = opt.x
-    rho_fixed = 0.8
-    hyperparam_opt = jnp.full_like(hyperparam_init, jnp.log(1 / rho_fixed - 1))
+    hyperparam_opt = opt.x
+    # if fixing bandwidth to 0.8, uncomment the following lines and comment out the optimization above
+    # rho_fixed = 0.8
+    # hyperparam_opt = jnp.full_like(hyperparam_init, jnp.log(1 / rho_fixed - 1))
+
     fixed_opt_fun = mvcr.fun_ccll_perm_sp(hyperparam_opt, y_perm_opt, x_perm_opt)
     rho_opt = 1 / (1 + jnp.exp(hyperparam_opt[0]))
     # l_scale_opt = jnp.exp(hyperparam_opt[1:])
     rho_opt_x = 1 / (1 + jnp.exp(hyperparam_opt[1:]))
-    # end = time.time()
+    end = time.time()
 
     # logging.info("Optimization time: {}s".format(round(end - start, 3)))
 
