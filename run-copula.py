@@ -126,13 +126,16 @@ def copula_regression(
     t_grid: ArrayLike,
     n_estimators: int,
 ) -> tuple[ArrayLike, Any]:
-
     # Return logcdf which is log P_N(y < t_grid | x_grid) with shape
     # (rollout_times, t_grid.shape[0], x_grid.shape[0])
 
     x_mesh_flat, t_mesh_flat = _prepare_copula_cregression_inputs(x_grid, t_grid)
     copula_cregression_obj = fit_copula_cregression(
-        y_prev, x_prev, single_x_bandwidth=False, n_perm_optim=10, n_perm=10
+        y_prev,
+        x_prev,
+        single_x_bandwidth=False,
+        n_perm_optim=10,
+        n_perm=10,
     )
     n = len(y_prev)
     logging.info("Bandwidth is {}".format(copula_cregression_obj.rho_opt))

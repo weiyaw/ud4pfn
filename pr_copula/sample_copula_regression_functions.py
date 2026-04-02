@@ -29,7 +29,7 @@ def pr_1step_conv_jregression(i,inputs):  #t = n+i
     d = jnp.shape(logcdf_conditionals)[1]
 
     #update pdf/cdf
-    logalpha = jnp.log(2- (1/(n+i+1)))-jnp.log(n+i+2)
+    logalpha = mvcr._logalpha_default(i, n_offset=n)
 
     u = jnp.exp(logcdf_conditionals)
     v = a_rand[i] #cdf of rv is uniformly distributed
@@ -118,11 +118,11 @@ def pr_1step_conv_cregression(i,inputs):  #t = n+i
     logcdf_conditionals_init,logpdf_joints_init,pdiff,cdiff = inputs #a is d-dimensional uniform rv
 
     n_test = jnp.shape(logcdf_conditionals)[0]
-    d = jnp.shape(logcdf_conditionals)[1]
+    d = jnp.shape(x)[1]
 
     #update pdf/cdf
     x_new = x[n+i]
-    logalpha = jnp.log(2- (1/(n+i+1)))-jnp.log(n+i+2)
+    logalpha = mvcr._logalpha_type1(i, d, n_offset=n)
 
     #compute x rhos/alphas
     logk_xx = mvcr.calc_logkxx(x_test,x_new,rho_x)
