@@ -3,8 +3,7 @@
 Two families of conditions are tested on the same stored per-rollout signed
 drift tensor b[k, r]:
 
-  "signed" -- the new signed-tail predictive-CLT conditions (Eq 3,
-              1A-first, 1A-second-at-k=n, 1B) from sandra_new0804.tex.
+  "signed" -- the signed-tail predictive-CLT conditions (C1)--(C4).
               These are path-wise a.s. statements, so the plot shows
               every rollout individually with NO cross-rollout averaging.
 
@@ -44,27 +43,28 @@ def compute_signed(b: np.ndarray, k_min: int, gamma_values: list[float]) -> dict
     """Per-rollout trajectories for the four signed-tail statistics.
 
     Uses the telescoping identity
-        sum_{k>=n} b_k   = L - P_{n-1}
+        sum_{k>=n} b_k   = P_infty - P_{n-1}
         sum_{k>=n} b_k^2 = Q_infty - Q_{n-1}
-    with L := P_{k_max}, Q_infty := Q_{k_max} (finite-truncation proxies).
+    with P_infty := P_{k_max}, Q_infty := Q_{k_max} (finite-truncation proxies).
     """
     K, R = b.shape
     ks = np.arange(k_min, k_min + K)
 
     P = np.cumsum(b, axis=0)          # [K, R]
     Q = np.cumsum(b * b, axis=0)      # [K, R]
-    L = P[-1]
+    Pinf = P[-1]
     Qinf = Q[-1]
 
     P_prev = np.concatenate([np.zeros((1, R)), P[:-1]], axis=0)
     Q_prev = np.concatenate([np.zeros((1, R)), Q[:-1]], axis=0)
 
-    signed_tail_gt = L[None, :] - P      # [K, R]   sum_{k > ks[i]} b_k
+    signed_tail_gt = Pinf[None, :] - P      # [K, R]   sum_{k > ks[i]} b_k
     squared_tail = Qinf[None, :] - Q_prev  # [K, R]  sum_{k >= ks[i]} b_k^2
 
     results: dict = {
         "n": ks,
         "P": P,
+        "unweighted_tail": np.abs(signed_tail_gt),
         "per_gamma": {},
     }
     for gamma in gamma_values:
@@ -97,38 +97,44 @@ def plot_signed(results: dict, out_path: str, title: str) -> None:
     ax_top = fig.add_subplot(gs[0, :])
     for r in range(R):
         ax_top.plot(
-            n, results["P"][:, r],
+            n, results["unweighted_tail"][:, r],
             color="black", alpha=0.22, linewidth=0.8, rasterized=True,
         )
-    ax_top.axhline(0.0, color="grey", linewidth=0.8, linestyle=":")
+    ax_top.axvline(cutoff, color="red", linestyle="--", linewidth=0.8, alpha=0.5)
     ax_top.set_xscale("log")
+    ax_top.set_yscale("log")
     ax_top.set_xlabel(r"$n$")
-    ax_top.set_ylabel(r"$P_n^{(r)} = \sum_{k=k_{\min}}^{n} b_k^{(r)}$")
+    ax_top.set_ylabel(r"$|P_{k_{\max}}^{(r)} - P_n^{(r)}|$")
     ax_top.set_title(
-        r"Eq 3: running signed partial sum converges iff $\sum_{k\geq n} b_k \to 0$",
+        r"(C1): $|P_{k_{\max}}^{(r)} - P_n^{(r)}|$",
         fontsize=10,
     )
     ax_top.grid(True, which="both", alpha=0.25)
 
     stat_info = [
         ("rate_residual_tail",
-         r"(1A) first: $n^{\gamma/2}\,|L^{(r)} - P_n^{(r)}|$"),
+         r"(C2): $n^{\gamma/2}\,|P_{k_{\max}}^{(r)} - P_n^{(r)}|$"),
         ("rate_abs_bn",
-         r"(1A) second, $k=n$: $n^{\gamma/2}\,|b_n^{(r)}|$"),
+         r"(C3): $n^{\gamma/2}\,|b_n^{(r)}|$"),
         ("rate_residual_squared",
-         r"(1B): $n^{\gamma}\,(Q^{(r)}_{\infty} - Q^{(r)}_{n-1})$"),
+         r"(C4): $n^{\gamma}\,(Q^{(r)}_{k_{\max}} - Q^{(r)}_{n-1})$"),
     ]
+
+    # Collect axes by column so we can share y-limits within each column.
+    col_axes: list[list[plt.Axes]] = [[] for _ in stat_info]
 
     for row, gamma in enumerate(gammas):
         for col, (key, label) in enumerate(stat_info):
             ax = fig.add_subplot(gs[1 + row, col])
+            col_axes[col].append(ax)
             arr = results["per_gamma"][gamma][key]
             for r in range(R):
                 ax.plot(
                     n, arr[:, r],
                     color="black", alpha=0.18, linewidth=0.7, rasterized=True,
                 )
-            ax.axvline(cutoff, color="red", linestyle="--", linewidth=0.8, alpha=0.5)
+            if key != "rate_abs_bn":
+                ax.axvline(cutoff, color="red", linestyle="--", linewidth=0.8, alpha=0.5)
             ax.set_xscale("log")
             ax.set_yscale("log")
             if row == 0:
@@ -138,6 +144,13 @@ def plot_signed(results: dict, out_path: str, title: str) -> None:
             if row == len(gammas) - 1:
                 ax.set_xlabel(r"$n$")
             ax.grid(True, which="both", alpha=0.25)
+
+    # Share y-limits within each column across all gamma rows.
+    for axes in col_axes:
+        ymin = min(ax.get_ylim()[0] for ax in axes)
+        ymax = max(ax.get_ylim()[1] for ax in axes)
+        for ax in axes:
+            ax.set_ylim(ymin, ymax)
 
     fig.suptitle(
         f"{title}\n"
@@ -296,11 +309,20 @@ def main() -> None:
                    default="Beta-Bernoulli PFN")
     p.add_argument("--fit-n-min", type=int, default=10)
     p.add_argument("--fit-n-max", type=int, default=300)
+    p.add_argument("--plot-k-max", type=int, default=None,
+                   help="Truncate b to this many steps before plotting. "
+                        "Useful for restricting to the in-distribution range.")
     args = p.parse_args()
 
     data = torch.load(args.diag, map_location="cpu", weights_only=False)
     b = data["b"].numpy()
     k_min = int(data["k_min"])
+
+    if args.plot_k_max is not None:
+        keep = args.plot_k_max - k_min + 1
+        if keep < b.shape[0]:
+            b = b[:keep]
+            print(f"[truncate] k_max -> {args.plot_k_max} (kept {keep} of {data['b'].shape[0]} steps)")
 
     out_dir = Path(args.out_dir)
     out_dir.mkdir(parents=True, exist_ok=True)
