@@ -45,11 +45,22 @@ def main() -> None:
     p.add_argument("--warmup-steps", type=int, default=50)
     p.add_argument("--log-every", type=int, default=20)
     p.add_argument("--seed", type=int, default=0)
+    p.add_argument("--alpha", type=float, default=1.0,
+                   help="Fixed Beta prior concentration alpha for Beta-Bernoulli "
+                        "meta-training. Appendix C uses alpha=beta=1 throughout.")
+    p.add_argument("--beta", type=float, default=1.0,
+                   help="Fixed Beta prior concentration beta.")
     p.add_argument("--out", type=str, default="beta_bernoulli/checkpoints/pfn.pt")
+    p.add_argument("--device", type=str, default="auto",
+                   help="'cpu', 'cuda', 'cuda:N', or 'auto' (cuda if available else cpu).")
     args = p.parse_args()
 
     torch.manual_seed(args.seed)
-    device = torch.device("cpu")
+    if args.device == "auto":
+        device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    else:
+        device = torch.device(args.device)
+    print(f"[device] {device}")
 
     model = PFN(
         x_dim=1,
@@ -74,6 +85,8 @@ def main() -> None:
         batch = sample_batch(
             seq_len=args.seq_len,
             batch_size=args.batch_size,
+            alpha=args.alpha,
+            beta=args.beta,
             device=device,
         )
 

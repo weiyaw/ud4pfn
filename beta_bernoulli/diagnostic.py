@@ -40,6 +40,7 @@ from __future__ import annotations
 import argparse
 from abc import ABC, abstractmethod
 
+import numpy as np
 import torch
 from torch import Tensor
 
@@ -96,6 +97,115 @@ class BayesOraclePredictor(Predictor):
             return self.alpha / (self.alpha + self.beta)
         S = y[:single_eval_pos].sum(dim=0)
         return (self.alpha + S) / (self.alpha + self.beta + single_eval_pos)
+
+
+class CorruptedOraclePredictor(Predictor):
+    """Oracle posterior predictive with a deterministic, prefix-dependent
+    perturbation on the logit scale.
+
+        g_n^corr(y_{1:n}) = sigmoid( logit(g_n^oracle(y_{1:n})) + eta_n(y_{1:n}) )
+
+    eta_n is deterministic in (rollout_index, step n, prefix bits), via a
+    linear hash with pre-drawn per-position / per-bit int64 constants. Making
+    eta_n a deterministic function of the prefix is what lets us apply the
+    two-point formula for b_n unchanged --- the corrupted predictor's output
+    depends only on (y_{1:n}, n), just like the oracle's does.
+
+    Two modes:
+      * 'noise': eta_n = eps * xi(y_{1:n}, n),   xi ~ N(0, 1) deterministic hash
+      * 'decay': eta_n = eps * n^{-p} * xi(y_{1:n}, n)
+
+    The corruption exponent p is the DECAY POWER of the perturbation; it has
+    no relationship to the QM power-law exponent fitted from hat_E|b_n|.
+    """
+
+    def __init__(
+        self,
+        alpha: Tensor,
+        beta: Tensor,
+        corruption_mode: str,
+        eps: float,
+        p: float | None = None,
+        max_seq_len: int = 20_000,
+        master_seed: int = 0,
+    ) -> None:
+        if corruption_mode not in ("noise", "decay"):
+            raise ValueError(f"corruption_mode must be 'noise' or 'decay', got {corruption_mode!r}")
+        if corruption_mode == "decay" and p is None:
+            raise ValueError("corruption_mode='decay' requires decay power p")
+        self.alpha = alpha
+        self.beta = beta
+        self.corruption_mode = corruption_mode
+        self.eps = float(eps)
+        self.p = float(p) if p is not None else None
+        self.max_seq_len = int(max_seq_len)
+        self.master_seed = int(master_seed)
+
+        info = np.iinfo(np.int64)
+        low, high = info.min // 2, info.max // 2
+        rng = np.random.default_rng(master_seed)
+        self._c0 = torch.from_numpy(
+            rng.integers(low=low, high=high, size=max_seq_len, dtype=np.int64).copy()
+        )
+        self._c1 = torch.from_numpy(
+            rng.integers(low=low, high=high, size=max_seq_len, dtype=np.int64).copy()
+        )
+        self._step_salts = torch.from_numpy(
+            rng.integers(low=low, high=high, size=max_seq_len + 1, dtype=np.int64).copy()
+        )
+        self._rollout_base: Tensor | None = None
+
+    def _ensure_rollout_base(self, R: int) -> None:
+        if self._rollout_base is None or self._rollout_base.shape[0] < R:
+            info = np.iinfo(np.int64)
+            low, high = info.min // 2, info.max // 2
+            rng = np.random.default_rng(self.master_seed + 1)
+            self._rollout_base = torch.from_numpy(
+                rng.integers(low=low, high=high, size=R, dtype=np.int64).copy()
+            )
+
+    @torch.no_grad()
+    def _noise(self, y: Tensor, single_eval_pos: int) -> Tensor:
+        """Compute eta_n(y_{1:n}) as a [R]-shaped tensor in y.dtype."""
+        _, R = y.shape
+        self._ensure_rollout_base(R)
+        base = self._rollout_base[:R]
+
+        if single_eval_pos == 0:
+            h = base.clone()
+        else:
+            if single_eval_pos > self.max_seq_len:
+                raise ValueError(f"single_eval_pos={single_eval_pos} exceeds max_seq_len={self.max_seq_len}")
+            prefix_bits = (y[:single_eval_pos] > 0.5)  # [sep, R] bool
+            c0 = self._c0[:single_eval_pos].unsqueeze(1)  # [sep, 1]
+            c1 = self._c1[:single_eval_pos].unsqueeze(1)
+            per_pos = torch.where(prefix_bits, c1, c0)  # [sep, R] int64
+            h = per_pos.sum(dim=0) + base  # int64 wraps on overflow
+
+        h = h + self._step_salts[single_eval_pos]
+
+        mask = (1 << 53) - 1
+        u_int = (h & mask).to(torch.float64)
+        u = (u_int + 0.5) / float(1 << 53)
+        xi = (2.0 ** 0.5) * torch.special.erfinv(2.0 * u - 1.0)
+
+        if self.corruption_mode == "noise":
+            eta = self.eps * xi
+        else:
+            n = max(single_eval_pos, 1)
+            eta = self.eps * (float(n) ** (-self.p)) * xi
+        return eta.to(y.dtype)
+
+    @torch.no_grad()
+    def predict(self, y: Tensor, single_eval_pos: int) -> Tensor:
+        if single_eval_pos == 0:
+            g_oracle = self.alpha / (self.alpha + self.beta)
+        else:
+            S = y[:single_eval_pos].sum(dim=0)
+            g_oracle = (self.alpha + S) / (self.alpha + self.beta + single_eval_pos)
+        eta = self._noise(y, single_eval_pos)
+        logit_g = torch.logit(g_oracle.clamp(1e-12, 1 - 1e-12))
+        return torch.sigmoid(logit_g + eta)
 
 
 # ---------------------------------------------------------------------------
@@ -163,7 +273,11 @@ def compute_b_and_delta(
 # ---------------------------------------------------------------------------
 
 
-def load_pfn_predictor(checkpoint_path: str, dtype: torch.dtype) -> PFNPredictor:
+def load_pfn_predictor(
+    checkpoint_path: str,
+    dtype: torch.dtype,
+    device: torch.device | None = None,
+) -> PFNPredictor:
     ckpt = torch.load(checkpoint_path, map_location="cpu", weights_only=False)
     args = ckpt["args"]
     model = PFN(
@@ -176,7 +290,55 @@ def load_pfn_predictor(checkpoint_path: str, dtype: torch.dtype) -> PFNPredictor
     ).to(dtype)
     model.load_state_dict(ckpt["model_state"])
     model.eval()
+    if device is not None:
+        model = model.to(device)
     return PFNPredictor(model)
+
+
+@torch.no_grad()
+def sample_predictor_induced_rollouts(
+    predictor: Predictor,
+    seq_len: int,
+    num_rollouts: int,
+    dtype: torch.dtype,
+    generator: torch.Generator,
+    log_every: int = 200,
+    y1_bernoulli_p: float = 0.5,
+    device: torch.device | None = None,
+) -> Tensor:
+    """Generate rollouts by iterating any Predictor's own predictive rule.
+
+    Used for both PFN and CorruptedOracle runs. For the PFN, we seed
+    Y_1 ~ Bernoulli(0.5) because the PFN requires at least one training
+    token; for the CorruptedOracle, we take y_1 from the step-0 predictive
+    (which is the corrupted prior mean).
+    """
+    import time
+    R = num_rollouts
+    device = device if device is not None else torch.device("cpu")
+    y = torch.zeros(seq_len, R, dtype=dtype, device=device)
+
+    # Bernoulli sampling stays on the generator's device (typically CPU).
+    if isinstance(predictor, PFNPredictor):
+        seed_cpu = torch.bernoulli(
+            torch.full((R,), y1_bernoulli_p, dtype=dtype),
+            generator=generator,
+        )
+    else:
+        g0 = predictor.predict(y, single_eval_pos=0)
+        seed_cpu = torch.bernoulli(g0.detach().to("cpu").to(dtype), generator=generator)
+    y[0] = seed_cpu.to(device)
+
+    print(f"[rollout] seq_len={seq_len} R={R} dtype={dtype} device={device}", flush=True)
+    t0 = time.time()
+    for n in range(2, seq_len + 1):
+        g = predictor.predict(y, single_eval_pos=n - 1)
+        sampled_cpu = torch.bernoulli(g.detach().to("cpu").to(dtype), generator=generator)
+        y[n - 1] = sampled_cpu.to(device)
+        if n % log_every == 0 or n == seq_len:
+            elapsed = time.time() - t0
+            print(f"[rollout] n={n}/{seq_len}  elapsed={elapsed:.1f}s", flush=True)
+    return y
 
 
 @torch.no_grad()
@@ -187,6 +349,7 @@ def sample_pfn_induced_rollouts(
     dtype: torch.dtype,
     generator: torch.Generator,
     log_every: int = 200,
+    device: torch.device | None = None,
 ) -> Tensor:
     """Generate rollouts by iterating the trained PFN's own predictive rule.
 
@@ -199,23 +362,20 @@ def sample_pfn_induced_rollouts(
     """
     import time
     R = num_rollouts
-    device = torch.device("cpu")
+    device = device if device is not None else torch.device("cpu")
     y = torch.zeros(seq_len, R, dtype=dtype, device=device)
-    # Seed Y_1 ~ Bernoulli(0.5) for each rollout.
-    y[0] = torch.bernoulli(
-        torch.full((R,), 0.5, dtype=dtype, device=device),
-        generator=generator,
+    # Seed Y_1 ~ Bernoulli(0.5) for each rollout. Sampling runs on the
+    # generator's device (typically CPU) then moves to the model device.
+    seed_cpu = torch.bernoulli(
+        torch.full((R,), 0.5, dtype=dtype), generator=generator,
     )
-    print(f"[rollout] seq_len={seq_len} R={R} dtype={dtype}", flush=True)
+    y[0] = seed_cpu.to(device)
+    print(f"[rollout] seq_len={seq_len} R={R} dtype={dtype} device={device}", flush=True)
     t0 = time.time()
-    # Iterate the PFN's predictive rule for n >= 2.
     for n in range(2, seq_len + 1):
-        # predictor.predict internally handles input truncation: it passes the
-        # first (single_eval_pos + 1) tokens of y. Here that is Y_{1:n-1}
-        # as training tokens plus one query token at position n-1.
         g = predictor.predict(y, single_eval_pos=n - 1)  # [R]
-        sampled = torch.bernoulli(g.to(dtype), generator=generator)
-        y[n - 1] = sampled
+        sampled_cpu = torch.bernoulli(g.detach().to("cpu").to(dtype), generator=generator)
+        y[n - 1] = sampled_cpu.to(device)
         if n % log_every == 0 or n == seq_len:
             elapsed = time.time() - t0
             print(
@@ -232,7 +392,7 @@ def sample_pfn_induced_rollouts(
 
 def main() -> None:
     p = argparse.ArgumentParser()
-    p.add_argument("--mode", choices=["pfn", "oracle"], required=True)
+    p.add_argument("--mode", choices=["pfn", "oracle", "corrupt"], required=True)
     p.add_argument("--checkpoint", type=str,
                    default="beta_bernoulli/checkpoints/pfn.pt",
                    help="PFN checkpoint (only used in --mode pfn)")
@@ -246,9 +406,31 @@ def main() -> None:
                    help="float64 lowers the oracle noise floor by ~9 orders of "
                         "magnitude; use it for oracle precision-floor studies. "
                         "For PFN use float32 to match training precision.")
+    p.add_argument("--corruption-mode", choices=["noise", "decay"], default=None,
+                   help="Required when --mode corrupt. 'noise': iid logit-scale "
+                        "Gaussian perturbation. 'decay': envelope eps * n^{-p}.")
+    p.add_argument("--epsilon", type=float, default=None,
+                   help="Perturbation amplitude on the logit scale (--mode corrupt).")
+    p.add_argument("--corrupt-p", type=float, default=None,
+                   help="Decay power p for --corruption-mode decay (perturbation "
+                        "envelope is eps * n^{-p}). Unrelated to the QM power-law "
+                        "exponent hat-beta fitted from hat_E|b_n|.")
+    p.add_argument("--alpha", type=float, default=1.0,
+                   help="Fixed Beta prior concentration alpha (oracle / corrupt modes).")
+    p.add_argument("--beta", type=float, default=1.0,
+                   help="Fixed Beta prior concentration beta (oracle / corrupt modes).")
+    p.add_argument("--device", type=str, default="auto",
+                   help="'cpu', 'cuda', 'cuda:N', or 'auto' (cuda if available "
+                        "else cpu). The Bernoulli sampler always uses the CPU "
+                        "generator for reproducibility.")
     args = p.parse_args()
 
     dtype = torch.float64 if args.dtype == "float64" else torch.float32
+    if args.device == "auto":
+        device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    else:
+        device = torch.device(args.device)
+    print(f"[device] {device}")
     torch.manual_seed(args.seed)
     torch.set_default_dtype(dtype)
     gen = torch.Generator(device="cpu").manual_seed(args.seed)
@@ -271,30 +453,75 @@ def main() -> None:
     beta: Tensor | None
     theta: Tensor | None
     if args.mode == "pfn":
-        predictor = load_pfn_predictor(args.checkpoint, dtype=dtype)
+        predictor = load_pfn_predictor(args.checkpoint, dtype=dtype, device=device)
         y = sample_pfn_induced_rollouts(
             predictor=predictor,
             seq_len=args.seq_len,
             num_rollouts=args.num_rollouts,
             dtype=dtype,
             generator=gen,
+            device=device,
         )
         alpha = None
         beta = None
         theta = None
-    else:
-        batch = sample_batch(seq_len=args.seq_len, batch_size=args.num_rollouts)
+    elif args.mode == "oracle":
+        batch = sample_batch(
+            seq_len=args.seq_len,
+            batch_size=args.num_rollouts,
+            alpha=args.alpha,
+            beta=args.beta,
+        )
         y = batch.y.to(dtype)
         alpha = batch.alpha.to(dtype)
         beta = batch.beta.to(dtype)
         theta = batch.theta
         predictor = BayesOraclePredictor(alpha=alpha, beta=beta)
+    else:  # corrupt
+        if args.corruption_mode is None or args.epsilon is None:
+            raise SystemExit("--mode corrupt requires --corruption-mode and --epsilon")
+        if args.corruption_mode == "decay" and args.corrupt_p is None:
+            raise SystemExit("--corruption-mode decay requires --corrupt-p")
+        # Fixed (alpha, beta) — every rollout uses the same base oracle, so the
+        # per-rollout variance comes only from the rollout's path and the
+        # corruption. Rollouts are drawn from the *corrupted* predictor's
+        # induced law (not from the Beta-Bernoulli prior predictive).
+        R = args.num_rollouts
+        alpha = torch.full((R,), float(args.alpha), dtype=dtype)
+        beta = torch.full((R,), float(args.beta), dtype=dtype)
+        theta = None
+        predictor = CorruptedOraclePredictor(
+            alpha=alpha,
+            beta=beta,
+            corruption_mode=args.corruption_mode,
+            eps=args.epsilon,
+            p=args.corrupt_p,
+            max_seq_len=args.seq_len + 1,
+            master_seed=args.seed,
+        )
+        y = sample_predictor_induced_rollouts(
+            predictor=predictor,
+            seq_len=args.seq_len,
+            num_rollouts=args.num_rollouts,
+            dtype=dtype,
+            generator=gen,
+        )
 
     # Run the probe loop.
     k_max = args.k_max if args.k_max is not None else args.seq_len - 1
     b, delta, f_prev = compute_b_and_delta(
         predictor=predictor, y=y, k_min=args.k_min, k_max=k_max,
     )
+
+    if args.mode == "pfn":
+        ckpt_tag = args.checkpoint
+    elif args.mode == "oracle":
+        ckpt_tag = "oracle-bayes-ppd"
+    else:
+        ckpt_tag = (
+            f"corrupted-oracle mode={args.corruption_mode} eps={args.epsilon:.3e}"
+            + (f" p={args.corrupt_p}" if args.corrupt_p is not None else "")
+        )
 
     torch.save(
         {
@@ -311,7 +538,10 @@ def main() -> None:
             "seq_len": args.seq_len,
             "mode": args.mode,
             "dtype": args.dtype,
-            "checkpoint": args.checkpoint if args.mode == "pfn" else "oracle-bayes-ppd",
+            "checkpoint": ckpt_tag,
+            "corruption_mode": args.corruption_mode,
+            "epsilon": args.epsilon,
+            "corrupt_p": args.corrupt_p,
         },
         args.out,
     )
