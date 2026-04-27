@@ -16,7 +16,7 @@ from posterior import compute_vn
 # %autoreload 2
 
 id_dir = "../outputs/2026-01-61"
-image_dir = "../paper/images"
+image_dir = "../paper/neurips2026/images"
 
 # %%
 ## 1D UQ decomposition at various x^*
@@ -122,7 +122,7 @@ fig.savefig(f"{image_dir}/ud-logreg-context-length.pdf")
 fig.tight_layout()
 
 # # Sanity check the proportion of aleatoric uncertainty
-fig, axes2 = plt.subplots(1, 2, figsize=(12, 4), constrained_layout=True)
+fig, axes2 = plt.subplots(2, 1, figsize=(5, 6.5), constrained_layout=True)
 for i, x in enumerate(data["x_grid"][x_grid_idx]):
     alea_prop = (
         np.mean(alea_entropy_all, axis=1)[..., i]
@@ -135,9 +135,8 @@ for i, x in enumerate(data["x_grid"][x_grid_idx]):
     else:
         axes2[0].plot(n_list, epis_prop, "--", label=f"x={x.item()}")
         axes2[1].plot(n_list, alea_prop, "--", label=f"x={x.item()}")
-axes2[1].legend(loc="lower right", ncol=2, fontsize=10)
-axes2[0].set_ylabel("Proportion of Total Uncertainty", fontsize=14)
-axes2[0].set_xlabel("Dataset Size/Context Length", fontsize=14)
+axes2[0].legend(loc="upper right", ncol=2, fontsize=10)
+fig.supylabel("Proportion of Total Uncertainty", fontsize=14)
 axes2[1].set_xlabel("Dataset Size/Context Length", fontsize=14)
 axes2[0].set_title("Epistemic Uncertainty", fontsize=14)
 axes2[1].set_title("Aleatoric Uncertainty", fontsize=14)
@@ -221,13 +220,12 @@ plt.tight_layout()
 plt.savefig(f"{image_dir}/ud-two-moons.pdf")
 
 # %%
-## 2D UQ decomposition (two moons) - subset
-setup_regex, title = setup_regex_list[0]
+## 2D UQ decomposition (two moons + spiral)
+fig, axes = plt.subplots(2, 3, figsize=(15, 8))
+
+# Row 0: two moons
 t_idx = DEFAULT_T_IDX["two-moons-1"]
-
-fig, axes = plt.subplots(1, 3, figsize=(15, 4))
-
-outdir = utils.get_matching_dirs(id_dir, setup_regex)
+outdir = utils.get_matching_dirs(id_dir, setup_regex_list[0][0])
 assert len(outdir) == 1
 outdir = outdir[0]
 data = utils.read_from(f"{outdir}/data.pickle")
@@ -236,26 +234,17 @@ y_prev = data["y_prev"]
 x_grid = data["x_grid"]
 grid_shape = data["grid_shape"]
 n = y_prev.size
-
-t = data["t"][t_idx]
-grid_shape = data["grid_shape"]
-gn = utils.read_from(f"{outdir}/gn.pickle")[t_idx]
-g0_to_gn = utils.read_from(f"{outdir}/g0_to_gn.pickle")[:, t_idx]
-true_prob = data["true_prob"][t_idx]
-
-clt_var = compute_vn(g0_to_gn, type="pointwise") / n
-total_entropy = compute_total_entropy_binary(gn)
-alea_entropy = compute_aleatoric_entropy_binary(gn, clt_var)
-assert total_entropy.shape == clt_var.shape == gn.shape == alea_entropy.shape
-epis_entropy = total_entropy - alea_entropy
-
-# Plot
-X = x_grid[:, 0].reshape(*grid_shape)
-Y = x_grid[:, 1].reshape(*grid_shape)
-
 unique_ys = np.unique(y_prev)
 markers = ["o", "^", "s", "D", "v", "P", "X"]
 
+gn = utils.read_from(f"{outdir}/gn.pickle")[t_idx]
+g0_to_gn = utils.read_from(f"{outdir}/g0_to_gn.pickle")[:, t_idx]
+clt_var = compute_vn(g0_to_gn, type="pointwise") / n
+total_entropy = compute_total_entropy_binary(gn)
+alea_entropy = compute_aleatoric_entropy_binary(gn, clt_var)
+epis_entropy = total_entropy - alea_entropy
+X = x_grid[:, 0].reshape(*grid_shape)
+Y = x_grid[:, 1].reshape(*grid_shape)
 
 def plot_heatmap(ax, X, Y, Z):
     im = ax.pcolormesh(
@@ -274,22 +263,15 @@ def plot_heatmap(ax, X, Y, Z):
     ax.set_xlabel("x1")
     ax.set_ylabel("x2")
 
-plot_heatmap(axes[0], X, Y, total_entropy.reshape(*grid_shape))
-axes[0].set_title(f"Total Uncertainty")
-plot_heatmap(axes[1], X, Y, alea_entropy.reshape(*grid_shape))
-axes[1].set_title(f"Aleatoric Uncertainty")
-plot_heatmap(axes[2], X, Y, epis_entropy.reshape(*grid_shape))
-axes[2].set_title(f"Epistemic Uncertainty")
-axes[0].legend(loc="upper right")
+plot_heatmap(axes[0, 0], X, Y, total_entropy.reshape(*grid_shape))
+axes[0, 0].set_title("Total Uncertainty")
+axes[0, 0].legend(loc="upper right")
+plot_heatmap(axes[0, 1], X, Y, alea_entropy.reshape(*grid_shape))
+axes[0, 1].set_title("Aleatoric Uncertainty")
+plot_heatmap(axes[0, 2], X, Y, epis_entropy.reshape(*grid_shape))
+axes[0, 2].set_title("Epistemic Uncertainty")
 
-plt.tight_layout()
-plt.savefig(f"{image_dir}/ud-two-moons-subset.pdf")
-
-
-# %%
-## 2D UQ decomposition (spiral)
-fig, axes = plt.subplots(1, 3, figsize=(15, 4))
-
+# Row 1: spiral
 outdir = utils.get_matching_dirs(id_dir, "spiral")
 assert len(outdir) == 1
 outdir = outdir[0]
@@ -299,58 +281,26 @@ y_prev = data["y_prev"]
 x_grid = data["x_grid"]
 grid_shape = data["grid_shape"]
 n = y_prev.size
-K = np.unique(y_prev).size  # number of classes
+K = np.unique(y_prev).size
+unique_ys = np.unique(y_prev)
 
-t = data["t"]
-grid_shape = data["grid_shape"]
 gn = utils.read_from(f"{outdir}/gn.pickle")  # (K, m)
 g0_to_gn = utils.read_from(f"{outdir}/g0_to_gn.pickle")  # (n+1, K, m)
-true_prob = data["true_prob"]
-
-clt_var = [compute_vn(g0_to_gn[:, k], type="pointwise") / n for k in range(K)]
-clt_var = np.array(clt_var)  # (K, m)
-assert gn.shape == clt_var.shape
-assert gn.shape[0] == K
+clt_var = np.array([compute_vn(g0_to_gn[:, k], type="pointwise") / n for k in range(K)])
 total_entropy = compute_total_entropy_multiclass(gn)  # (m,)
 alea_entropy = compute_aleatoric_entropy_multiclass(gn, clt_var)  # (m,)
-assert total_entropy.shape == alea_entropy.shape
 epis_entropy = total_entropy - alea_entropy  # (m,)
-
-# Plot
 X = x_grid[:, 0].reshape(*grid_shape)
 Y = x_grid[:, 1].reshape(*grid_shape)
 
-unique_ys = np.unique(y_prev)
-markers = ["o", "^", "s", "D", "v", "P", "X"]
-
-
-def plot_heatmap(ax, X, Y, Z):
-    im = ax.pcolormesh(
-        X, Y, Z, shading="auto", edgecolors="face", linewidths=0, rasterized=True
-    )
-    for i, y_val in enumerate(unique_ys):
-        mask = y_prev == y_val
-        ax.scatter(
-            x_prev[mask, 0],
-            x_prev[mask, 1],
-            label=f"y={y_val}",
-            marker=markers[i % len(markers)],
-            s=30,
-        )
-    plt.colorbar(im, ax=ax)
-    ax.set_xlabel("x1")
-    ax.set_ylabel("x2")
-
-
-plot_heatmap(axes[0], X, Y, total_entropy.reshape(*grid_shape))
-axes[0].set_title(f"Total Uncertainty")
-plot_heatmap(axes[1], X, Y, alea_entropy.reshape(*grid_shape))
-axes[1].set_title(f"Aleatoric Uncertainty")
-plot_heatmap(axes[2], X, Y, epis_entropy.reshape(*grid_shape))
-axes[2].set_title(f"Epistemic Uncertainty")
-axes[0].legend(loc="upper right")
-
+plot_heatmap(axes[1, 0], X, Y, total_entropy.reshape(*grid_shape))
+axes[1, 0].set_title("Total Uncertainty")
+axes[1, 0].legend(loc="upper right")
+plot_heatmap(axes[1, 1], X, Y, alea_entropy.reshape(*grid_shape))
+axes[1, 1].set_title("Aleatoric Uncertainty")
+plot_heatmap(axes[1, 2], X, Y, epis_entropy.reshape(*grid_shape))
+axes[1, 2].set_title("Epistemic Uncertainty")
 
 plt.tight_layout()
-plt.savefig(f"{image_dir}/ud-spiral.pdf")
+plt.savefig(f"{image_dir}/ud-two-moons-spiral.pdf")
 # %%

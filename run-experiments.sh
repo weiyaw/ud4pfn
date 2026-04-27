@@ -45,6 +45,11 @@ for rep_dir in outputs/2026-01-23/*/; do
     python run-bootstrap.py rep_dir="$rep_dir" bootstrap_samples=200
 done
 
+for rep_dir in outputs/2026-01-23/*/; do
+    if [[ $(basename "$rep_dir") =~ ^setup=(gaussian|poisson) ]]; then
+        python run-copula.py rep_dir="$rep_dir"
+    fi
+done
 
 # gap
 for setup in gaussian-linear gaussian-polynomial gaussian-linear-dependent-error gaussian-sine poisson-linear probit-mixture categorical-linear; do

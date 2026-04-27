@@ -14,7 +14,7 @@ import utils
 np.set_printoptions(formatter={"float_kind": "{:.2e}".format}, linewidth=200)
 pd.set_option("display.max_rows", None)
 id_dir = "../outputs/2026-01-33"
-image_dir = "../paper/images"
+image_dir = "../paper/neurips2026/images"
 
 
 def trapezoidal_cumsum(n, b):
