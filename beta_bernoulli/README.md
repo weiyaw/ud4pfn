@@ -3,7 +3,7 @@
 A small meta-trained PFN on Beta-Bernoulli binary sequences, plus the exact
 Beta-Bernoulli Bayes posterior predictive distribution (PPD) as a
 precision-floor reference. The testbed evaluates the predictive-CLT
-sufficient conditions (C1)--(C4) and the quasi-martingale conditions (Q1)--(Q2)
+sufficient conditions (C1)--(C5) and the quasi-martingale condition (Q$_\gamma$)
 against a controlled, analytically-tractable predictor.
 
 ## Source files

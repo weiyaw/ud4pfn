@@ -1,14 +1,18 @@
 """Predictive-CLT diagnostic plots for the Beta-Bernoulli testbed.
 
-Two families of conditions are tested on the same stored per-rollout signed
-drift tensor b[k, r]:
+Two families of conditions are tested on the stored per-rollout drift tensor
+b[k, r] and increment tensor delta[k, r]:
 
-  "signed" -- the pathwise signed-tail conditions (C1)--(C4), certifying a
-              predictive CLT at rate n^{gamma/2} (Theorem th:ascondmult in
-              sandra_new0804.tex). (C1) does not involve gamma. (C2), (C3),
-              (C4) are swept over a dense gamma grid (default 10 rows from
-              gamma=0.1 to 1.0); the reader eyeballs whether the per-rollout
-              trajectories decay to zero. No automated pass/fail.
+  "signed" -- the pathwise signed-tail conditions (C1)--(C5), certifying a
+              predictive CLT at rate n^{gamma/2} (Theorem th:ascondmult).
+              (C1)--(C4) test conditions on the conditional drift b_k and
+              should decay to zero; (C5) tests the residual quadratic-variation
+              condition (iii) on the realised increments delta_k and should
+              stabilise at a positive finite limit. (C1) does not involve
+              gamma; (C2)--(C5) are swept over a dense gamma grid (default
+              10 rows from gamma=0.1 to 1.0). The certified rate is the
+              largest gamma at which (C2)--(C4) decay to zero and (C5)
+              stabilises at a positive finite value on every rollout.
 
   "qm"     -- Sandra's general-gamma quasi-martingale condition (Q_gamma):
               sum_{k>=1} k^{gamma/2} E|b_k| < +oo  (eq:rootn_qm in
@@ -40,13 +44,25 @@ import torch
 # ---------------------------------------------------------------------------
 
 
-def compute_signed(b: np.ndarray, k_min: int, gammas: np.ndarray) -> dict:
-    """Per-rollout trajectories for the four signed-tail statistics at each gamma.
+def compute_signed(
+    b: np.ndarray,
+    k_min: int,
+    gammas: np.ndarray,
+    delta: np.ndarray | None = None,
+) -> dict:
+    """Per-rollout trajectories for the signed-tail statistics at each gamma.
 
     Uses the telescoping identity
-        sum_{k>=n} b_k   = P_infty - P_{n-1}
-        sum_{k>=n} b_k^2 = Q_infty - Q_{n-1}
-    with P_infty := P_{k_max}, Q_infty := Q_{k_max} (finite-truncation proxies).
+        sum_{k>=n} b_k     = P_infty - P_{n-1}
+        sum_{k>=n} b_k^2   = Q_infty - Q_{n-1}
+        sum_{k>n}  delta_k^2 = S_infty - S_n
+    with P_infty := P_{k_max}, Q_infty := Q_{k_max}, S_infty := S_{k_max}
+    (finite-truncation proxies).
+
+    If ``delta`` is supplied, also computes (C5): n^gamma * sum_{k > n} delta_k^2,
+    the residual quadratic variation (Theorem th:ascondmult condition (iii)).
+    Unlike (C2)--(C4) which decay to zero, (C5) stabilises at a positive finite
+    limit at the correct gamma.
     """
     K, R = b.shape
     ks = np.arange(k_min, k_min + K)
@@ -60,6 +76,15 @@ def compute_signed(b: np.ndarray, k_min: int, gammas: np.ndarray) -> dict:
     signed_tail_gt = Pinf[None, :] - P      # sum_{k > n} b_k   (for C1, C2)
     squared_tail = Qinf[None, :] - Q_prev    # sum_{k >= n} b_k^2 (for C4)
 
+    if delta is not None:
+        if delta.shape != b.shape:
+            raise ValueError(f"delta shape {delta.shape} != b shape {b.shape}")
+        S = np.cumsum(delta * delta, axis=0)        # [K, R]
+        Sinf = S[-1]
+        delta_squared_tail_gt = Sinf[None, :] - S    # sum_{k > n} delta_k^2 (for C5)
+    else:
+        delta_squared_tail_gt = None
+
     results: dict = {
         "n": ks,
         "unweighted_tail": np.abs(signed_tail_gt),
@@ -69,11 +94,14 @@ def compute_signed(b: np.ndarray, k_min: int, gammas: np.ndarray) -> dict:
         nf = ks.astype(np.float64)
         n_half = nf ** (gamma / 2.0)
         n_full = nf ** gamma
-        results["per_gamma"][float(gamma)] = {
+        per = {
             "rate_residual_tail": n_half[:, None] * np.abs(signed_tail_gt),
             "rate_abs_bn": n_half[:, None] * np.abs(b),
             "rate_residual_squared": n_full[:, None] * squared_tail,
         }
+        if delta_squared_tail_gt is not None:
+            per["rate_delta_squared_tail"] = n_full[:, None] * delta_squared_tail_gt
+        results["per_gamma"][float(gamma)] = per
     return results
 
 
@@ -83,25 +111,31 @@ def plot_signed(
     title: str,
     c2_xlim: tuple[int, int] | None = (2000, 5000),
 ) -> None:
-    """Per-rollout plot of P_n and the three rate-weighted residual panels.
+    """Per-rollout plot of P_n and the rate-weighted residual panels.
 
     Top row: (C1) per-rollout trajectories (no gamma), full width.
-    Below: one row per gamma, three columns for (C2), (C3), (C4).
-    ``c2_xlim`` restricts the x-axis of the (C2) column only; (C3) and
-    (C4) keep the full range.
+    Below: one row per gamma, four columns for (C2), (C3), (C4), (C5).
+    ``c2_xlim`` restricts the x-axis of the (C2) column only; the remaining
+    columns keep the full range. (C5) is the residual quadratic-variation
+    diagnostic for condition (iii) of Theorem th:ascondmult and is rendered
+    on a linear y-axis since it should stabilise at a positive finite limit
+    rather than decay to zero.
     """
     gammas = sorted(results["per_gamma"].keys())
     n = results["n"]
     K, R = results["unweighted_tail"].shape
     cutoff = n[0] + (K // 2)
 
-    fig = plt.figure(figsize=(13, 2.2 + 1.3 * len(gammas)))
+    has_c5 = "rate_delta_squared_tail" in next(iter(results["per_gamma"].values()))
+    n_cols = 4 if has_c5 else 3
+
+    fig = plt.figure(figsize=(4.3 * n_cols, 2.2 + 1.3 * len(gammas)))
     gs = fig.add_gridspec(
         nrows=1 + len(gammas),
-        ncols=3,
+        ncols=n_cols,
         height_ratios=[1.6] + [0.85] * len(gammas),
         hspace=0.55,
-        wspace=0.3,
+        wspace=0.32,
     )
 
     ax_top = fig.add_subplot(gs[0, :])
@@ -123,26 +157,34 @@ def plot_signed(
 
     stat_info = [
         ("rate_residual_tail",
-         r"(C2): $n^{\gamma/2}\,|P_{k_{\max}}^{(r)} - P_n^{(r)}|$"),
+         r"(C2): $n^{\gamma/2}\,|P_{k_{\max}}^{(r)} - P_n^{(r)}|$",
+         "log"),
         ("rate_abs_bn",
-         r"(C3): $n^{\gamma/2}\,|b_n^{(r)}|$"),
+         r"(C3): $n^{\gamma/2}\,|b_n^{(r)}|$",
+         "log"),
         ("rate_residual_squared",
-         r"(C4): $n^{\gamma}\,(Q^{(r)}_{k_{\max}} - Q^{(r)}_{n-1})$"),
+         r"(C4): $n^{\gamma}\,(Q^{(r)}_{k_{\max}} - Q^{(r)}_{n-1})$",
+         "log"),
     ]
+    if has_c5:
+        stat_info.append((
+            "rate_delta_squared_tail",
+            r"(C5): $n^{\gamma}\,(S^{(r)}_{k_{\max}} - S^{(r)}_n)$",
+            "linear",
+        ))
 
     if c2_xlim is not None:
         c2_mask = (n >= c2_xlim[0]) & (n <= c2_xlim[1])
     else:
         c2_mask = np.ones_like(n, dtype=bool)
 
-    # Which column is C2?
-    c2_col = next(i for i, (k, _) in enumerate(stat_info)
+    c2_col = next(i for i, (k, *_ ) in enumerate(stat_info)
                   if k == "rate_residual_tail")
 
     col_axes: list[list[plt.Axes]] = [[] for _ in stat_info]
 
     for row, gamma in enumerate(gammas):
-        for col, (key, label) in enumerate(stat_info):
+        for col, (key, label, yscale) in enumerate(stat_info):
             ax = fig.add_subplot(gs[1 + row, col])
             col_axes[col].append(ax)
             arr = results["per_gamma"][gamma][key]
@@ -154,7 +196,7 @@ def plot_signed(
             if key != "rate_abs_bn":
                 ax.axvline(cutoff, color="red", linestyle="--", linewidth=0.8, alpha=0.5)
             ax.set_xscale("log")
-            ax.set_yscale("log")
+            ax.set_yscale(yscale)
             if col == c2_col and c2_xlim is not None:
                 ax.set_xlim(*c2_xlim)
                 vis = arr[c2_mask].ravel()
@@ -170,8 +212,7 @@ def plot_signed(
                 ax.set_xlabel(r"$n$")
             ax.grid(True, which="both", alpha=0.25)
 
-    # C3 and C4 keep the full x-range; share their y-axis across gamma rows
-    # (same behaviour as before the C2 windowing was introduced).
+    # All columns except C2 share their y-axis across gamma rows.
     for col, axes in enumerate(col_axes):
         if col == c2_col:
             continue
@@ -188,7 +229,7 @@ def plot_signed(
     fig.savefig(out_path, bbox_inches="tight", dpi=150)
     plt.close(fig)
     print(f"[signed] wrote {out_path}  ({R} per-rollout paths, "
-          f"{len(gammas)} gamma rows)")
+          f"{len(gammas)} gamma rows, {n_cols} columns)")
 
 
 # ---------------------------------------------------------------------------
@@ -354,12 +395,15 @@ def main() -> None:
 
     data = torch.load(args.diag, map_location="cpu", weights_only=False)
     b = data["b"].numpy()
+    delta = data["delta"].numpy() if "delta" in data and data["delta"] is not None else None
     k_min = int(data["k_min"])
 
     if args.plot_k_max is not None:
         keep = args.plot_k_max - k_min + 1
         if keep < b.shape[0]:
             b = b[:keep]
+            if delta is not None:
+                delta = delta[:keep]
             print(f"[truncate] k_max -> {args.plot_k_max} "
                   f"(kept {keep} of {data['b'].shape[0]} steps)")
 
@@ -368,12 +412,13 @@ def main() -> None:
     stem = args.stem or Path(args.diag).stem
 
     if "signed" in args.conditions:
-        results = compute_signed(b, k_min=k_min, gammas=gammas)
+        results = compute_signed(b, k_min=k_min, gammas=gammas, delta=delta)
         xlim = tuple(args.c2_xlim) if args.c2_xlim[1] > args.c2_xlim[0] else None
+        col_label = "(C1)-(C5)" if delta is not None else "(C1)-(C4)"
         plot_signed(
             results,
             out_path=str(out_dir / f"{stem}-signed.pdf"),
-            title=f"{args.title} — pathwise signed conditions (C1)-(C4)",
+            title=f"{args.title} — pathwise signed conditions {col_label}",
             c2_xlim=xlim,
         )
 
