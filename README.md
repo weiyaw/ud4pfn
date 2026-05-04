@@ -1,4 +1,4 @@
-# A Principled Framework for Uncertainty Decomposition in TabPFN
+# Uncertainty Decomposition for Bayes-Filtered Transformers via Bayesian Predictive Inference
 
 ## Reproducing Results from the Paper
 
