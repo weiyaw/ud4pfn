@@ -161,26 +161,7 @@ def get_df(all_dirs: list[str], alpha: float = 0.05) -> pd.DataFrame:
 
 
 # %%
-# This is n_est=64
-# Scalar x
-id_dir = "../outputs/2026-01-22/" # (coverage for scalar x)
-
-dfs05 = []
-dfs20 = []
-for n in [200, 500, 1000]:
-    all_dirs = utils.get_matching_dirs(id_dir, rf".+n={n} .+")
-    dfs05.append(get_df(all_dirs, alpha=0.05))
-    dfs20.append(get_df(all_dirs, alpha=0.20))
-
-dfs05 = pd.concat(dfs05).sort_values(by=["setup", "n"]).reset_index(drop=True)
-print(dfs05.to_markdown(index=False))
-dfs20 = pd.concat(dfs20).sort_values(by=["setup", "n"]).reset_index(drop=True)
-print(dfs20.to_markdown(index=False))
-
-
-
-# %%
-# This is n_est=16
+# Multivariate x
 id_dir = "../outputs/2026-01-23/" # (coverage for multivariate x)
 
 dfs05 = []
