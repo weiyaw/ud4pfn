@@ -19,8 +19,7 @@ figures and tables in the paper.
 
 | Experiment                              | Run Script             | Visualization Script      |
 | --------------------------------------- | ---------------------- | ------------------------- |
-| Quasi-martingale check                  | `run-quasi-simple.py`  | `visual-quasi-simple.py`  |
-| Coverage                                | `run-ghat.py`          | `visual-coverage.py`      |
+| Coverage                                | `run-ghat.py`, `run-bootstrap.py`, `run-copula.py`          | `visual-coverage.py`      |
 | Gap                                     | `run-ghat.py`          | `visual-gap.py`           |
 | Real data analysis                      | `run-real-analysis.py` | `visual-real-analysis.py` |
 | Entropy-based uncertainty decomposition | `run-ghat.py`          | `visual-decompose.py`     |
@@ -34,7 +33,8 @@ figures and tables in the paper.
 +-- run-experiments.sh       (bash script to compute artifacts for all plots in the paper;
 |                             all outputs are saved in the `outputs/` directory)
 +-- run-ghat.py              (computes terms required for V_n and U_n)
-+-- run-quasi-simple.py      (computes terms for quasi-martingale checks)
++-- run-bootstrap.py         (computes bootstrap-based credible intervals)
++-- run-copula.py            (computes Nagler and Rügamer 2025, copula-based credible intervals)
 +-- run-real-analysis.py     (computes V_n for the real-data analysis)
 
 +-- visual-*.py              (scripts to generate and save figures used in the paper)
@@ -44,5 +44,6 @@ figures and tables in the paper.
 +-- metrics.py               (credible intervals, coverage, and entropy-based uncertainty decomposition)
 +-- posterior.py             (predictive CLT logic, i.e., Gaussian approximation of the martingale posterior)
 +-- pred_rule.py             (extensions of the vanilla TabPFN predictive rule with helper methods)
++-- pr_copula/               (Copula-based martingale posterior adapted from Fong et al 2023 to implement Nagler and Rügamer 2025)
 +-- utils.py                 (miscellaneous utility functions)
 ```

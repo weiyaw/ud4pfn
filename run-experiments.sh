@@ -1,8 +1,13 @@
-# simple quasi-check
-for outer_idx in $(seq 0 99); do
-    python run-quasi-simple.py id="2026-01-33" fix_data=False n_estimators=8 outer_idx=$outer_idx seed=1000
-    python run-quasi-simple.py id="2026-01-33" fix_data=False n_estimators=16 outer_idx=$outer_idx seed=1000
+
+# coverage (n_est=16)
+for seed in $(seq 1000 1099); do
+    for setup in gaussian-linear gaussian-polynomial gaussian-linear-dependent-error gaussian-sine poisson-linear probit-mixture categorical-linear; do
+        for data_size in 200 500 1000; do
+            python run-ghat.py id="2026-01-23" setup="$setup" n_estimators=16 x_design="uniform-1d" seed=$seed data_size=$data_size
+        done
+    done
 done
+
 
 # coverage (multivariate, n_est=16)
 for seed in $(seq 1000 1049); do
@@ -21,6 +26,11 @@ for rep_dir in outputs/2026-01-23/*/; do
     python run-bootstrap.py rep_dir="$rep_dir" bootstrap_samples=200
 done
 
+for rep_dir in outputs/2026-01-23/*/; do
+    if [[ $(basename "$rep_dir") =~ ^setup=(gaussian|poisson) ]]; then
+        python run-copula.py rep_dir="$rep_dir"
+    fi
+done
 
 # gap
 for setup in gaussian-linear gaussian-polynomial gaussian-linear-dependent-error gaussian-sine poisson-linear probit-mixture categorical-linear; do
