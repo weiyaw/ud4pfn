@@ -45,16 +45,16 @@ $$
 .venv/bin/python diagnostic.py --mode pfn \
     --checkpoint checkpoints/seqlen1024_training600.pt \
     --out checkpoints/diag_seqlen1024_training600.pt \
-    --num-rollouts 16 --seq-len 1025 --k-min 2 --k-max 1024 \
+    --num-rollouts 16 --seq-len 10001 --k-min 2 --k-max 10000 \
     --dtype float32 --seed 0
 .venv/bin/python diagnostic.py --mode pfn \
     --checkpoint checkpoints/seqlen1024_training50k.pt \
     --out checkpoints/diag_seqlen1024_training50k.pt \
-    --num-rollouts 16 --seq-len 1025 --k-min 2 --k-max 1024 \
+    --num-rollouts 16 --seq-len 10001 --k-min 2 --k-max 10000 \
     --dtype float32 --seed 0
 .venv/bin/python diagnostic.py --mode oracle \
     --out checkpoints/diag_oracle.pt \
-    --num-rollouts 16 --seq-len 1025 --k-min 2 --k-max 1024 \
+    --num-rollouts 16 --seq-len 10001 --k-min 2 --k-max 10000 \
     --dtype float64 --seed 1
 
 # plot
