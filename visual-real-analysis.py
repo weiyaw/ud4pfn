@@ -16,7 +16,7 @@ image_dir = "../paper/neurips2026/images"
 
 # %%
 # Labour force
-expdir = "../outputs/real-analysis/"
+expdir = "../outputs/2026-01-51/"
 outdir = utils.get_matching_dirs(expdir, r"labour-force.+n_est=64")
 assert len(outdir) == 1
 outdir = outdir[0]
@@ -65,7 +65,7 @@ fig.savefig(f"{image_dir}/labour-force-vn.pdf")
 
 # %%
 # Fibre strength
-expdir = "../outputs/real-analysis/"
+expdir = "../outputs/2026-01-51/"
 outdir = utils.get_matching_dirs(expdir, r"fibre-strength.+n_est=64")
 assert len(outdir) == 1
 outdir = outdir[0]

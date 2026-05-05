@@ -15,7 +15,7 @@ from posterior import compute_vn
 # %load_ext autoreload
 # %autoreload 2
 
-id_dir = "../outputs/entropic-ud"
+id_dir = "../outputs/2026-01-61"
 image_dir = "../paper/neurips2026/images"
 
 # %%
@@ -71,9 +71,9 @@ x_grid_idx = [0, 25, 50, 75, 100, 125, 150]
 total_entropy_all = []
 alea_entropy_all = []
 for n in n_list:
-    # use entropic-ud-vary-n
+    # use 2026-01-62
     outdir = utils.get_matching_dirs(
-        "../outputs/entropic-ud-vary-n", rf"logistic-linear.+n={n} .+"
+        "../outputs/2026-01-62", rf"logistic-linear.+n={n} .+"
     )
     assert len(outdir) == 50
     total_entropy_seeds = []
