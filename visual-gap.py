@@ -35,7 +35,7 @@ def plot_band(ax, x_grid, ci_band, true_event, X):
 
 # %%
 ## BAND
-id_dir = "../outputs/2026-01-12/"
+id_dir = "../outputs/gap/"
 image_dir = "../paper/neurips2026/images"
 
 regressor = [

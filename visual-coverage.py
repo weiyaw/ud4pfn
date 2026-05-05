@@ -162,7 +162,7 @@ def get_df(all_dirs: list[str], alpha: float = 0.05) -> pd.DataFrame:
 
 # %%
 # Multivariate x
-id_dir = "../outputs/2026-01-23/" # (coverage for multivariate x)
+id_dir = "../outputs/coverage/" # (coverage for multivariate x)
 
 dfs05 = []
 dfs20 = []
