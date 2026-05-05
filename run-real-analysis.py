@@ -61,7 +61,7 @@ def main(cfg: DictConfig):
 
     logging.info(f"Saving outputs to {savedir}")
 
-    # Save this in case we need to inspect data generating distrihttps://myis.dpird.wa.gov.au/assystnet/application.jsp#homepagebution
+    # Save this in case we need to inspect data generating distribution
     utils.write_to_local(f"{savedir}/setup.pickle", setup)
 
     # This is pure numpy array, so it's faster to load

@@ -6,7 +6,6 @@ REGRESSION = [
     "gaussian-sine",
     "poisson-linear",
     "gamma",
-    "gaussian-linear-susan",
     "gaussian-linear-multivariate",
     "gaussian-linear-dependent-error-multivariate",
     "poisson-linear-multivariate",
