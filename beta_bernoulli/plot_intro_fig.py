@@ -81,9 +81,9 @@ def build_panel_a(ax, y_bits: np.ndarray, g_n: float, V_n: float, alpha: float, 
     ax.plot(t, pdf_gauss, color="C0", linewidth=1.8, linestyle="--",
             label=r"Predictive CLT")
     ax.set_xlim(max(0.0, g_n - 4 * sigma), min(1.0, g_n + 4 * sigma))
-    ax.set_xlabel(r"$\theta$")
+    ax.set_xlabel(r"$\tilde\theta$")
     ax.set_ylabel("density")
-    ax.set_title(rf"(a) Posterior of $\theta \mid y_{{1:{n}}}$", fontsize=10)
+    ax.set_title(rf"(a) Posterior of $\tilde\theta \mid y_{{1:{n}}}$", fontsize=10)
     ax.legend(fontsize=7, loc="upper right", frameon=False,
               handlelength=1.1, borderaxespad=0.3, labelspacing=0.25)
 

@@ -411,9 +411,17 @@ def plot_qm(
     fit_curve = np.exp(logC) * n_fit.astype(np.float64) ** (-beta)
     gamma_Q_star = max(0.0, min(1.0, 2.0 * (beta - 1.0)))
 
+    # Degenerate noise-floor case: the exact Bayes oracle has b_n identically
+    # zero, so |b_n| sits at the ~1e-16 float floor and the power-law fit is a
+    # meaningless fit to numerical noise (beta ~ 0). Here (Q_gamma) is trivially
+    # satisfied for every gamma, so the per-curve pass/fail tags are misleading.
+    # The real BFTs (median |b_n| ~ 1e-7) and the corrupted oracles
+    # (>= ~1e-8) sit far above this threshold, so their (fail) tags are kept.
+    noise_floor = float(np.median(E_abs[fit_mask])) < 1e-12
+
     print(f"[qm] R={R} rollouts, n in [{n[0]}, {n[-1]}]")
     print(f"[qm] beta_hat = {beta:.3f} (95% CI +/- {ci:.3f}),  "
-          f"gamma_Q* = min(1, 2(beta-1)) = {gamma_Q_star:.3f}")
+          f"gamma_Q* = min(1, max(0, 2(beta-1))) = {gamma_Q_star:.3f}")
 
     fig, axes = plt.subplots(1, 2, figsize=(9, 3.6))
 
@@ -437,8 +445,10 @@ def plot_qm(
     for i, g in enumerate(gammas_U):
         color = cmap(i / max(1, len(gammas_U) - 1))
         passes = beta > 1.0 + g / 2.0
-        style = "-" if passes else "--"
-        label = rf"$\gamma={g}$" + ("" if passes else "  (fail)")
+        # Suppress the pass/fail styling in the noise-floor case: (Q_gamma) is
+        # trivially satisfied there, so every gamma is drawn solid and untagged.
+        style = "-" if (passes or noise_floor) else "--"
+        label = rf"$\gamma={g}$" + ("" if (passes or noise_floor) else "  (fail)")
         ax.plot(n, U[g], color=color, linestyle=style, linewidth=1.3, label=label)
     ax.set_xscale("log")
     ax.set_yscale("log")
@@ -451,12 +461,17 @@ def plot_qm(
     ax.grid(True, which="both", alpha=0.3)
     ax.legend(fontsize=9, loc="best")
 
-    fig.suptitle(
-        f"{title}\n"
-        rf"$\widehat\beta={beta:.3f}$;  "
-        rf"$\gamma_Q^*=\min(1,2(\widehat\beta-1))={gamma_Q_star:.3f}$",
-        fontsize=12,
-    )
+    if noise_floor:
+        subtitle = (
+            r"$b_n\equiv 0$ (noise floor); $(Q_\gamma)$ trivially satisfied "
+            r"for all $\gamma$"
+        )
+    else:
+        subtitle = (
+            rf"$\widehat\beta={beta:.3f}$;  "
+            rf"$\gamma_Q^*=\min(1,\max(0,2(\widehat\beta-1)))={gamma_Q_star:.3f}$"
+        )
+    fig.suptitle(f"{title}\n{subtitle}", fontsize=12)
     fig.tight_layout()
     fig.savefig(out_path, bbox_inches="tight", dpi=150)
     plt.close(fig)
