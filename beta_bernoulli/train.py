@@ -2,7 +2,7 @@
 
 Usage (from repo root):
     beta_bernoulli/.venv/bin/python beta_bernoulli/train.py \
-        --seq-len 1024 --steps 600 --batch-size 32 --d-model 64
+        --seq-len 1024 --steps 600 --batch-size 16 --d-model 64
 
 A checkpoint is written to beta_bernoulli/checkpoints/pfn.pt.
 """
@@ -35,7 +35,7 @@ def cosine_with_warmup(optimizer, warmup_steps: int, total_steps: int) -> Lambda
 def main() -> None:
     p = argparse.ArgumentParser()
     p.add_argument("--seq-len", type=int, default=1024)
-    p.add_argument("--batch-size", type=int, default=32)
+    p.add_argument("--batch-size", type=int, default=16)
     p.add_argument("--d-model", type=int, default=64)
     p.add_argument("--nhead", type=int, default=4)
     p.add_argument("--nlayers", type=int, default=2)
