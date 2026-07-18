@@ -125,6 +125,7 @@ def copula_regression(
     x_grid: ArrayLike,
     t_grid: ArrayLike,
     n_estimators: int,
+    seed: int = 100,
 ) -> tuple[ArrayLike, Any]:
     # Return logcdf which is log P_N(y < t_grid | x_grid) with shape
     # (rollout_times, t_grid.shape[0], x_grid.shape[0])
@@ -159,6 +160,7 @@ def copula_regression(
         copula_cregression_obj.rho_x_opt,
         B_postsamples=rollout_times,
         T_fwdsamples=rollout_length,
+        seed=seed,
     )
 
     logcdf = logcdf.reshape(rollout_times, jnp.shape(t_grid)[0], jnp.shape(x_grid)[0])
@@ -193,6 +195,7 @@ def save_copula_samples_for_rep(rep_dir: str, cfg: DictConfig) -> None:
         x_grid=rep_data["x_grid"],
         t_grid=rep_data["t"],
         n_estimators=n_estimators,
+        seed=int(cfg.seed),
     )
     # logcdf: (rollout_times, t_grid.shape[0], x_grid.shape[0])
     elapsed = timer() - start
