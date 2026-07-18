@@ -1,4 +1,7 @@
 # %%
+import os
+from pathlib import Path
+
 import matplotlib.pyplot as plt
 import numpy as np
 
@@ -15,8 +18,15 @@ from posterior import compute_vn
 # %load_ext autoreload
 # %autoreload 2
 
-id_dir = "../outputs/entropic-ud"
-image_dir = "../paper/neurips2026/images"
+# Resolve all repo paths relative to the repo root (this file lives at the repo
+# root), never relative to the current working directory.
+REPO_ROOT = Path(__file__).resolve().parent
+OUTPUTS_DIR = REPO_ROOT / "outputs"
+FIG_DIR = Path(os.environ.get("UD4PFN_FIGDIR", REPO_ROOT / "figures"))
+FIG_DIR.mkdir(parents=True, exist_ok=True)
+
+id_dir = str(OUTPUTS_DIR / "entropic-ud")
+image_dir = str(FIG_DIR)
 
 # %%
 ## 1D UQ decomposition at various x^*
@@ -73,7 +83,7 @@ alea_entropy_all = []
 for n in n_list:
     # use entropic-ud-vary-n
     outdir = utils.get_matching_dirs(
-        "../outputs/entropic-ud-vary-n", rf"logistic-linear.+n={n} .+"
+        str(OUTPUTS_DIR / "entropic-ud-vary-n"), rf"logistic-linear.+n={n} .+"
     )
     assert len(outdir) == 50
     total_entropy_seeds = []

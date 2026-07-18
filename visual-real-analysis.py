@@ -1,5 +1,7 @@
 # %%
+import os
 import re
+from pathlib import Path
 
 import matplotlib.pyplot as plt
 import numpy as np
@@ -12,11 +14,17 @@ from metrics import (
 )
 from posterior import compute_vn
 
-image_dir = "../paper/neurips2026/images"
+# Resolve all repo paths relative to the repo root (this file lives at the repo
+# root), never relative to the current working directory.
+REPO_ROOT = Path(__file__).resolve().parent
+OUTPUTS_DIR = REPO_ROOT / "outputs"
+FIG_DIR = Path(os.environ.get("UD4PFN_FIGDIR", REPO_ROOT / "figures"))
+FIG_DIR.mkdir(parents=True, exist_ok=True)
+image_dir = str(FIG_DIR)
 
 # %%
 # Labour force
-expdir = "../outputs/real-analysis/"
+expdir = str(OUTPUTS_DIR / "real-analysis")
 outdir = utils.get_matching_dirs(expdir, r"labour-force.+n_est=64")
 assert len(outdir) == 1
 outdir = outdir[0]
@@ -65,7 +73,7 @@ fig.savefig(f"{image_dir}/labour-force-vn.pdf")
 
 # %%
 # Fibre strength
-expdir = "../outputs/real-analysis/"
+expdir = str(OUTPUTS_DIR / "real-analysis")
 outdir = utils.get_matching_dirs(expdir, r"fibre-strength.+n_est=64")
 assert len(outdir) == 1
 outdir = outdir[0]

@@ -1,5 +1,7 @@
 # %%
+import os
 import re
+from pathlib import Path
 
 import matplotlib.pyplot as plt
 import numpy as np
@@ -33,10 +35,17 @@ def plot_band(ax, x_grid, ci_band, true_event, X):
     ax.set_ylim(-0.1, 1.1)
 
 
+# Resolve all repo paths relative to the repo root (this file lives at the repo
+# root), never relative to the current working directory.
+REPO_ROOT = Path(__file__).resolve().parent
+OUTPUTS_DIR = REPO_ROOT / "outputs"
+FIG_DIR = Path(os.environ.get("UD4PFN_FIGDIR", REPO_ROOT / "figures"))
+FIG_DIR.mkdir(parents=True, exist_ok=True)
+
 # %%
 ## BAND
-id_dir = "../outputs/gap/"
-image_dir = "../paper/neurips2026/images"
+id_dir = str(OUTPUTS_DIR / "gap")
+image_dir = str(FIG_DIR)
 
 regressor = [
     "gaussian-linear",

@@ -1,6 +1,7 @@
 # %%
 import re
 import os
+from pathlib import Path
 
 import numpy as np
 import pandas as pd
@@ -21,6 +22,13 @@ from posterior import compute_un, compute_vn
 
 # %load_ext autoreload
 # %autoreload 2
+
+# Resolve all repo paths relative to the repo root (this file lives at the repo
+# root), never relative to the current working directory.
+REPO_ROOT = Path(__file__).resolve().parent
+OUTPUTS_DIR = REPO_ROOT / "outputs"
+FIG_DIR = Path(os.environ.get("UD4PFN_FIGDIR", REPO_ROOT / "figures"))
+FIG_DIR.mkdir(parents=True, exist_ok=True)
 
 # %%
 
@@ -162,7 +170,7 @@ def get_df(all_dirs: list[str], alpha: float = 0.05) -> pd.DataFrame:
 
 # %%
 # Multivariate x
-id_dir = "../outputs/coverage/" # (coverage for multivariate x)
+id_dir = str(OUTPUTS_DIR / "coverage")  # (coverage for multivariate x)
 
 dfs05 = []
 dfs20 = []
