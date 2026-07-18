@@ -484,32 +484,6 @@ class Data2D(Data):
         plt.show()
 
 
-class GaussianLinearSusan(Data2D):
-
-    def _param(self, x: np.ndarray):
-        assert x.ndim == 2 and x.shape[1] == 2
-        alpha = 1.0
-        beta = np.array([1.5, -0.8])
-        mean = alpha + beta @ x.T
-        noise_std = 0.7
-        assert mean.shape == (x.shape[0],)
-        return mean, noise_std
-
-    def get_xy(self, key, n):
-        x = jr.uniform(key, shape=(n, 2), minval=0, maxval=1)
-        # linear function plus constant Gaussian noise
-        mean, noise_std = self._param(x)
-        y = mean + jr.normal(key, shape=mean.shape) * noise_std
-        return np.array(x), np.array(y).astype(float)
-
-    def get_true_event(self, x: np.ndarray, t: float) -> np.ndarray:
-        # return the P(Y <= t | x) of Gaussian at mean=true_curve(x), sd=0.5
-        mean, noise_std = self._param(x)
-        cdf = norm.cdf(t, loc=mean, scale=noise_std)
-        assert cdf.shape == (x.shape[0],)
-        return cdf.astype(float)
-
-
 class DataMultivariate(Data):
     def __init__(
         self, key: jax.random.key, n: int, shuffle: bool, x_design: str | None = None

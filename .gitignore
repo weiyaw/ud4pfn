@@ -8,6 +8,5 @@ slurm-log/
 outputs/
 .vscode/
 tabpfn-model/
-susan/
 .venv/
 beta_bernoulli/checkpoints/

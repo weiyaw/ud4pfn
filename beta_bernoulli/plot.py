@@ -14,10 +14,9 @@ b[k, r] and increment tensor delta[k, r]:
               is the largest gamma at which (C2)--(C4) decay to zero and
               (R) stabilises at a positive finite value on every rollout.
 
-  "qm"     -- Sandra's general-gamma quasi-martingale condition (Q_gamma):
-              sum_{k>=1} k^{gamma/2} E|b_k| < +oo  (eq:rootn_qm in
-              sandra_internal_work.tex). Expectation-based, so it uses the
-              cross-rollout mean hat_E|b_n|. Fit a power law hat_E|b_n| ~
+  "qm"     -- the general-gamma quasi-martingale condition (Q_gamma):
+              sum_{k>=1} k^{gamma/2} E|b_k| < +oo. Expectation-based, so
+              it uses the cross-rollout mean hat_E|b_n|. Fit a power law hat_E|b_n| ~
               C n^{-beta}; sufficient condition is beta > 1 + gamma/2,
               giving gamma_Q_star = min(1, 2(beta-1)). We also plot
               U_gamma(n) = sum_{m<=n} m^{gamma/2} hat_E|b_m| for several
@@ -41,7 +40,7 @@ import torch
 
 
 # ---------------------------------------------------------------------------
-# Signed-tail pathwise conditions (Theorem th:ascondmult, sandra_new0804.tex)
+# Signed-tail pathwise conditions (Theorem th:ascondmult)
 # ---------------------------------------------------------------------------
 
 
@@ -339,7 +338,7 @@ def plot_signed(
 
 
 # ---------------------------------------------------------------------------
-# Quasi-martingale condition (general gamma, Sandra eq:rootn_qm)
+# Quasi-martingale condition (general gamma)
 # ---------------------------------------------------------------------------
 
 
@@ -364,7 +363,7 @@ def compute_qm(
     k_min: int,
     gammas_U: tuple = (0.0, 0.25, 0.5, 0.75, 1.0),
 ) -> dict:
-    """Cross-rollout aggregates for Sandra's general-gamma (Q_gamma).
+    """Cross-rollout aggregates for the general-gamma (Q_gamma).
 
     hat_E|b_n| = mean_r |b_n^(r)|.
     U_gamma(n) = sum_{m<=n} m^{gamma/2} hat_E|b_m|.
