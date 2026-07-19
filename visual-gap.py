@@ -118,9 +118,21 @@ for name in regressor + classifier:
                 axes[k, i].set_ylabel(f"$P(Y = 1 | x)$")
             axes[k, i].set_ylim(-0.01, 1.01)
 
-    axes[-1, 2].legend(loc="upper right")
+    # Single figure-level legend below all panels (previously sat inside the
+    # bottom-right panel and occluded the band/mean there).
+    h_data, l_data = axes[0, 0].get_legend_handles_labels()
+    h_band, l_band = axes[1, 0].get_legend_handles_labels()
+    handles = h_data + h_band
+    labels = l_data + l_band
     fig.tight_layout()
-    fig.savefig(f"{image_dir}/gap-{name}.pdf")
+    fig.legend(
+        handles,
+        labels,
+        loc="lower center",
+        ncol=len(labels),
+        bbox_to_anchor=(0.5, -0.02),
+    )
+    fig.savefig(f"{image_dir}/gap-{name}.pdf", bbox_inches="tight")
 
 
 # %%

@@ -53,6 +53,8 @@ def plot_band_lf(ax, x_grid, ci_band, X):
     ax.scatter(X, np.full_like(X, 0.12), marker="|", s=50, c="black", alpha=0.6)
     ax.set_xlim(X.min(), X.max())
     ax.set_ylim(0.1, 0.9)
+    ax.set_xlabel(r"Family income (\$1000s)")
+    ax.set_ylabel("Participation probability")
     ax.legend(loc="upper right")
 
 
@@ -98,10 +100,12 @@ def plot_band_fs(ax, x_grid, ci_band, X):
     ax.fill_between(
         x_grid, ci_band["lower"], ci_band["upper"], alpha=0.25, label="95% band"
     )
-    ax.plot(x_grid, ci_band["mean"], "k", lw=1.5, label=r"$R(1.5 MPa \mid x)$")
+    ax.plot(x_grid, ci_band["mean"], "k", lw=1.5, label=r"$R(1.5\,\mathrm{MPa}\mid x)$")
     ax.scatter(X, np.full_like(X, 0.42), marker="|", s=50, c="black", alpha=0.6)
     ax.set_xlim(X.min(), X.max())
     ax.set_ylim(0.4, 1.05)
+    ax.set_xlabel("Gauge length (mm)")
+    ax.set_ylabel(r"Reliability $R(1.5\,\mathrm{MPa}\mid x)$")
     ax.legend(loc="upper right")
 
 

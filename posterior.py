@@ -2,7 +2,13 @@ import jax.random as jr
 import numpy as np
 from tqdm import trange
 
-from pred_rule import TabPFNClassifierPPD, TabPFNRegressorPPD, assert_ppd_args_shape
+try:
+    from pred_rule import TabPFNClassifierPPD, TabPFNRegressorPPD, assert_ppd_args_shape
+except ImportError:
+    # tabpfn is only needed to *generate* posterior draws (compute_gn etc.).
+    # Plotting scripts that merely read cached pickles and call compute_vn /
+    # compute_un do not need it, so allow the module to import without tabpfn.
+    TabPFNClassifierPPD = TabPFNRegressorPPD = assert_ppd_args_shape = None
 
 
 def compute_gn(clf, t, x_grid, x_prev, y_prev):
