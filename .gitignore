@@ -10,4 +10,5 @@ figures/
 .vscode/
 tabpfn-model/
 .venv/
-beta_bernoulli/checkpoints//outputs
+beta_bernoulli/checkpoints/
+/outputs
