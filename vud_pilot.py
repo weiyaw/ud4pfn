@@ -118,6 +118,7 @@ for s in range(args.mc_u):
 
 Va = H_entropy_samples.mean(axis=0)            # aleatoric upper bound
 epis_vud = total_entropy - Va                  # epistemic lower bound
+Va_se = H_entropy_samples.std(axis=0, ddof=1) / np.sqrt(args.mc_u)
 print(f"VUD side done in {timer() - start:.1f}s")
 
 # ---------------------------------------------------------------- compare + save
@@ -126,9 +127,14 @@ from scipy.stats import spearmanr
 rho_epis = spearmanr(epis_clt, epis_vud).statistic
 rho_alea = spearmanr(alea_clt, Va).statistic
 neg_frac = (epis_vud < 0).mean()
+# Coherence test: for an exactly coherent Bayesian, E_U[H] <= H_total pointwise
+# (tower property + Jensen). z > 2 flags Va > H_total beyond MC noise.
+z = (Va - total_entropy) / np.maximum(Va_se, 1e-12)
+sig2, sig3 = (z > 2).mean(), (z > 3).mean()
 print(f"Spearman(epistemic CLT, epistemic VUD-LB) = {rho_epis:.3f}")
 print(f"Spearman(aleatoric CLT, Va)               = {rho_alea:.3f}")
 print(f"fraction of grid with VUD epistemic LB < 0: {neg_frac:.3f}")
+print(f"fraction with Va > H_total at z>2: {sig2:.3f}   at z>3: {sig3:.3f}")
 
 # probe points: moon cores, class-overlap region, far corners
 probes = {
@@ -136,13 +142,11 @@ probes = {
     "overlap": [0.5, 0.25], "far corner NE": [2.4, 2.4],
     "far corner SW": [-1.4, -1.4],
 }
-print(f"\n{'probe':>14} | {'g_n':>5} | {'total':>6} | {'aleaCLT':>7} | {'episCLT':>7} | {'Va':>6} | {'episVUD':>7}")
-rows = []
+print(f"\n{'probe':>14} | {'g_n':>5} | {'total':>6} | {'aleaCLT':>7} | {'episCLT':>7} | {'Va':>6} | {'Va_se':>6} | {'episVUD':>7} | {'z':>6}")
 for name, xy in probes.items():
     i = int(np.argmin(((x_grid - np.array(xy)) ** 2).sum(1)))
-    rows.append((name, gn[i], total_entropy[i], alea_clt[i], epis_clt[i], Va[i], epis_vud[i]))
     print(f"{name:>14} | {gn[i]:5.2f} | {total_entropy[i]:6.3f} | {alea_clt[i]:7.3f} | "
-          f"{epis_clt[i]:7.3f} | {Va[i]:6.3f} | {epis_vud[i]:7.3f}")
+          f"{epis_clt[i]:7.3f} | {Va[i]:6.3f} | {Va_se[i]:6.3f} | {epis_vud[i]:7.3f} | {z[i]:6.1f}")
 
 outdir = REPO_ROOT / args.outdir
 outdir.mkdir(parents=True, exist_ok=True)
