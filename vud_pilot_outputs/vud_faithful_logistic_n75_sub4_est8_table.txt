@@ -1,0 +1,17 @@
+================ faithful VUD on TabPFN: logistic-linear ================
+n=75 classes=2 CLT grid=151 VUD subgrid=4 K=2 keep=2 est=8
+wall-clock: CLT side 67s, VUD side 12s
+candidates with Va > H_total (coherence violation): 0.125
+points where ALL 2 candidates violate:   0.000
+points with negative max_Ve AFTER their KL-rank+min aggregation: 0.000
+forward KL (coherence meter): median=0.0004  90%=0.0008  max=0.0009
+Spearman(epis CLT, max_Ve raw)  = -0.800
+Spearman(epis CLT, max_Ve clip) = -0.800
+
+         probe | pmax(cls) |  total | episCLT |  minVa |   maxVe |  #viol/2 |  medKL
+      far left |  0.64(0) |  0.653 |   0.016 |  0.624 |   0.029 |        0 | 0.0000
+    left flank |  0.64(0) |  0.653 |   0.016 |  0.624 |   0.029 |        0 | 0.0000
+   data edge L |  0.68(0) |  0.631 |   0.038 |  0.630 |   0.000 |        1 | 0.0001
+  boundary x=2 |  0.50(0) |  0.693 |   0.029 |  0.691 |   0.002 |        0 | 0.0008
+   data edge R |  0.50(0) |  0.693 |   0.029 |  0.691 |   0.002 |        0 | 0.0008
+     far right |  0.61(0) |  0.667 |   0.013 |  0.641 |   0.027 |        0 | 0.0007
