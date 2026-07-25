@@ -1,5 +1,7 @@
 ### (a) Finite-horizon sup statistic at gamma=1
 
+Per-rollout sup statistic max_{k<=N} k^{1/2}|Delta_k| (and the drift version with b_k in place of Delta_k), median [min, max] across the 16 rollouts. For both BFTs the sup is attained early (argmax k <= 76, median <= 9; see HTML comments) and never overtaken, so the statistic is constant in N across 1024 / 5000 / 10001 -- it has stabilised well before the training horizon. The oracle's b-row is the float64 noise floor of b == 0: it grows like N^{1/2} x 1e-16 with argmax at k ~ N.
+
 | Model | Statistic | N=1024 | N=5000 | N=10001 |
 |---|---|---|---|---|
 | pfn-600 | sup k^{1/2}|Delta_k| | 0.167 [0.0471, 0.48] | 0.167 [0.0471, 0.48] | 0.167 [0.0471, 0.48] |
@@ -15,7 +17,11 @@
 | oracle | sup k^{1/2}|b_k| | 3.54e-15 [8.86e-16, 3.55e-15] | 7.85e-15 [3.88e-15, 1.07e-14] | 1.11e-14 [5.5e-15, 1.92e-14] |
 <!-- oracle sup k^{1/2}|b_k|: argmax k across rollouts med=9996 range=[5620, 10000] -->
 
-### (b) T-split at n = T = 1024, gamma=1 — pfn-600
+### (b) T-split at n = T = 1024, gamma=1
+
+Per-rollout median value and log-log OLS slope of each condition trajectory (definitions and tail horizon N = 10^4 exactly as plotted), on the window n in [32, 512] (within T) and n in [1200, 5000] (beyond T), aggregated as median [min, max] over 16 rollouts. C1-C4 require decay (negative slope); (R) requires stabilisation at a positive level (slope ~ 0).
+
+#### pfn-600
 
 | Cond | within-T value | within-T slope | beyond-T value | beyond-T slope |
 |---|---|---|---|---|
@@ -27,7 +33,7 @@
 
 (R) coherent-model reference level theta_hat(1-theta_hat): 0.0424 [0.0249, 0.237]
 
-### (b) T-split at n = T = 1024, gamma=1 — pfn-50k
+#### pfn-50k
 
 | Cond | within-T value | within-T slope | beyond-T value | beyond-T slope |
 |---|---|---|---|---|
@@ -39,7 +45,7 @@
 
 (R) coherent-model reference level theta_hat(1-theta_hat): 0.13 [0.0102, 0.249]
 
-### (b) T-split at n = T = 1024, gamma=1 — oracle
+#### oracle (exact Bayes; b == 0 analytically, values are the numerical floor)
 
 | Cond | within-T value | within-T slope | beyond-T value | beyond-T slope |
 |---|---|---|---|---|
