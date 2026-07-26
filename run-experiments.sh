@@ -1,57 +1,55 @@
+#!/usr/bin/env bash
+set -euo pipefail
 
-# coverage (multivariate, n_est=16). Outputs land in outputs/coverage/.
+# 1. Frequentist coverage
 for seed in $(seq 1000 1049); do
-    for setup in gaussian-linear-multivariate gaussian-linear-dependent-error poisson-linear-multivariate probit-mixture-multivariate categorical-linear-multivariate; do
+    for setup in gaussian-linear-multivariate gaussian-linear-dependent-error-multivariate poisson-linear-multivariate probit-mixture-multivariate categorical-linear-multivariate; do
         for data_size in 200 500 1000; do
-            for x_design in "sobol-10d"; do
-                python run-ghat.py id="coverage" setup="$setup" n_estimators=16 x_design="$x_design" seed=$seed data_size=$data_size
-            done
+            uv run python -m experiments.coverage.run \
+                setup="$setup" data_size="$data_size" seed="$seed"
         done
     done
 done
 
-
-# bootstrap samples for coverage (required by visual-coverage.py)
 for rep_dir in outputs/coverage/*/; do
-    python run-bootstrap.py rep_dir="$rep_dir" bootstrap_samples=200
+    uv run python -m experiments.coverage.run_bootstrap \
+        rep_dir="$rep_dir" bootstrap_samples=200
 done
 
 for rep_dir in outputs/coverage/*/; do
     if [[ $(basename "$rep_dir") =~ ^setup=(gaussian|poisson) ]]; then
-        python run-copula.py rep_dir="$rep_dir"
+        uv run python -m experiments.coverage.run_copula rep_dir="$rep_dir"
     fi
 done
 
-# gap (one-gap covariate design). Outputs land in outputs/gap/.
+# 2. Gap in observations
 for setup in gaussian-linear gaussian-polynomial gaussian-linear-dependent-error gaussian-sine poisson-linear probit-mixture categorical-linear; do
     for data_size in 200 500 1000; do
-        python run-ghat.py id="gap" setup="$setup" n_estimators=64 x_design="one-gap" seed=1000 data_size=$data_size
+        uv run python -m experiments.gap.run \
+            setup="$setup" data_size="$data_size" seed=1000
     done
 done
 
+# 3. Real-data illustrations
+uv run python -m experiments.real_analysis.run setup=labour-force seed=1000
+uv run python -m experiments.real_analysis.run setup=fibre-strength seed=1000
 
-
-# real data analysis. Outputs land in outputs/real-analysis/.
-python run-real-analysis.py id="real-analysis" setup="labour-force" n_estimators=64 seed=1000
-python run-real-analysis.py id="real-analysis" setup="fibre-strength" n_estimators=64 seed=1000
-
-
-# entropic uncertainty decomposition (varying x^star). Outputs land in outputs/entropic-ud/.
+# 4. Entropic uncertainty decomposition
 for data_size in 15 50 75 150; do
-    python run-ghat.py id="entropic-ud" setup=logistic-linear n_estimators=64 x_design="gaussian:1.5:3.0" data_size=$data_size fix_data=True seed=1000
+    uv run python -m experiments.entropic_ud.run \
+        setup=logistic-linear data_size="$data_size" fix_data=true seed=1000
 done
 
+for setup_size in two-moons-1:30 two-moons-2:30 two-moons-1:100 two-moons-2:100 spiral:200; do
+    setup=${setup_size%%:*}
+    data_size=${setup_size##*:}
+    uv run python -m experiments.entropic_ud.run \
+        setup="$setup" x_design=null data_size="$data_size" fix_data=false seed=1000
+done
 
-# entropic uncertainty decomposition (2D and 3D examples)
-python run-ghat.py id="entropic-ud" setup=two-moons-1 n_estimators=64 x_design=None data_size=30 fix_data=False seed=1000
-python run-ghat.py id="entropic-ud" setup=two-moons-2 n_estimators=64 x_design=None data_size=30 fix_data=False seed=1000
-python run-ghat.py id="entropic-ud" setup=two-moons-1 n_estimators=64 x_design=None data_size=100 fix_data=False seed=1000
-python run-ghat.py id="entropic-ud" setup=two-moons-2 n_estimators=64 x_design=None data_size=100 fix_data=False seed=1000
-python run-ghat.py id="entropic-ud" setup=spiral n_estimators=64 x_design=None data_size=200 fix_data=False seed=1000
-
-# entropic uncertainty decomposition (varying number of data size). Outputs land in outputs/entropic-ud-vary-n/.
 for seed in $(seq 1000 1049); do
     for data_size in $(seq 75 5 200); do
-        python run-ghat.py id="entropic-ud-vary-n" setup=logistic-linear n_estimators=64 x_design="gaussian:1.5:3.0" data_size=$data_size fix_data=False mc_samples=0 seed=$seed
+        uv run python -m experiments.entropic_ud.run --config-name vary_n \
+            data_size="$data_size" seed="$seed"
     done
 done

@@ -11,5 +11,5 @@ obsolete/
 .vscode/
 tabpfn-model/
 .venv/
-beta_bernoulli/checkpoints/
+experiments/beta_bernoulli/checkpoints/
 /outputs

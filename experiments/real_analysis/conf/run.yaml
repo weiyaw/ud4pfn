@@ -1,0 +1,19 @@
+defaults:
+  - _self_
+
+setup: labour-force
+x_grid_size: 100
+shuffle_data: true
+seed: 1000
+n_estimators: 64
+mc_samples: 1000
+id: real-analysis
+lastrun: ${now:%Y-%m-%dT%H:%M:%S%z}
+git: ${githash:}
+
+hydra:
+  run:
+    dir: "./outputs/${id}/setup=${setup} shuffle=${shuffle_data} n_est=${n_estimators} m=${x_grid_size} seed=${seed}"
+  sweep:
+    dir: ${hydra.run.dir}
+    subdir: .

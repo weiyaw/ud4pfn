@@ -1,0 +1,22 @@
+defaults:
+  - _self_
+
+setup: gaussian-linear-multivariate
+data_size: 200
+x_grid_size: 100
+x_design: sobol-10d
+shuffle_data: true
+fix_data: false
+seed: 1000
+n_estimators: 16
+mc_samples: 1000
+id: coverage
+lastrun: ${now:%Y-%m-%dT%H:%M:%S%z}
+git: ${githash:}
+
+hydra:
+  run:
+    dir: "./outputs/${id}/setup=${setup} x_design=${x_design} shuffle=${shuffle_data} n_est=${n_estimators} n=${data_size} m=${x_grid_size} seed=${seed}"
+  sweep:
+    dir: ${hydra.run.dir}
+    subdir: .

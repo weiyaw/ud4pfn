@@ -1,0 +1,14 @@
+defaults:
+  - run
+  - _self_
+
+setup: logistic-linear
+data_size: 75
+x_grid_size: 100
+x_design: "gaussian:1.5:3.0"
+shuffle_data: true
+fix_data: false
+seed: 1000
+n_estimators: 64
+mc_samples: 0
+id: entropic-ud-vary-n

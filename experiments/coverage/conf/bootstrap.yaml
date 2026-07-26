@@ -1,0 +1,14 @@
+defaults:
+  - _self_
+
+rep_dir: null
+bootstrap_samples: 1000
+seed_offset: 10391
+overwrite: false
+lastrun: ${now:%Y-%m-%dT%H:%M:%S%z}
+git: ${githash:}
+
+hydra:
+  output_subdir: null
+  run:
+    dir: "${rep_dir}"
