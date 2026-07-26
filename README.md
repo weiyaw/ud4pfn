@@ -12,18 +12,52 @@ Paper: [arXiv link forthcoming]
 
 ## Setup
 
-Requires **Python >= 3.11**. From the repository root:
+Requires [uv](https://docs.astral.sh/uv/) and **Python >= 3.11**. From the
+repository root:
 
 ```bash
-pip install -r requirements.txt
+uv sync
 ```
 
-`requirements.txt` pins `tabpfn==6.2.0` and `torch==2.9.0` (the versions used
-in the paper). A CPU build of `jax` is recommended to avoid GPU conflicts with
-PyTorch. All `run-*.py` and `visual-*.py` scripts must be executed **from the
-repository root** (paths such as the Hydra output directory and
-`fibre_strength.csv` are resolved relative to the working directory or to the
-script location).
+`pyproject.toml` and `uv.lock` are the authoritative environment definitions.
+They pin `tabpfn==6.2.0` and `torch==2.9.0` (the versions used in the paper).
+On Linux, uv installs JAX with its pip-bundled CUDA 12 runtime and installs the
+CUDA 12.8 build of PyTorch. On other platforms, it installs the standard PyPI
+builds of JAX and PyTorch. The Linux CUDA environment requires a compatible
+NVIDIA GPU and driver, but does not require a separately installed CUDA
+toolkit.
+
+Run commands inside the managed environment with `uv run`, for example:
+
+```bash
+uv run python run-ghat.py --help
+uv run pytest
+```
+
+`requirements.txt` is retained as a generated, runtime-only export for pip
+compatibility; do not edit it manually. Regenerate it after dependency changes
+with:
+
+```bash
+uv export --locked --no-dev --no-emit-project --no-hashes \
+  --output-file requirements.txt
+```
+
+On Linux, pip users must also provide the PyTorch CUDA 12.8 index referenced by
+the uv project:
+
+```bash
+python -m pip install \
+  --extra-index-url https://download.pytorch.org/whl/cu128 \
+  -r requirements.txt
+```
+
+On non-Linux platforms, `python -m pip install -r requirements.txt` is
+sufficient.
+
+All `run-*.py` and `visual-*.py` scripts must be executed **from the repository
+root** (paths such as the Hydra output directory and `fibre_strength.csv` are
+resolved relative to the working directory or to the script location).
 
 The `beta_bernoulli/` diagnostic testbed uses a **separate, self-contained
 environment** (PyTorch only, no TabPFN or JAX); see
