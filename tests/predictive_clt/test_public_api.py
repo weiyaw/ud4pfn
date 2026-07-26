@@ -5,6 +5,8 @@ import predictive_clt
 
 
 EXPECTED_PUBLIC_API = {
+    "TabICLClassifierPPD",
+    "TabICLRegressorPPD",
     "TabPFNClassifierPPD",
     "TabPFNRegressorPPD",
     "compute_gn",

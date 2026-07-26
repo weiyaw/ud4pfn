@@ -13,9 +13,12 @@ from .posterior import (
     compute_vn,
     sample_gn_plus_1,
 )
+from .tabicl_adapter import TabICLClassifierPPD, TabICLRegressorPPD
 from .tabpfn_adapter import TabPFNClassifierPPD, TabPFNRegressorPPD
 
 __all__ = [
+    "TabICLClassifierPPD",
+    "TabICLRegressorPPD",
     "TabPFNClassifierPPD",
     "TabPFNRegressorPPD",
     "compute_gn",

@@ -9,7 +9,7 @@ outputs/
 figures/
 obsolete/
 .vscode/
-tabpfn-model/
+pfn-model/
 .venv/
 experiments/beta_bernoulli/checkpoints/
 /outputs

@@ -5,8 +5,8 @@ repo_root=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
 cd "$repo_root"
 
 checkpoints=(
-    "tabpfn-model/tabpfn-v2.5-classifier-v2.5_default.ckpt"
-    "tabpfn-model/tabpfn-v2.5-regressor-v2.5_default.ckpt"
+    "pfn-model/tabpfn-v3-classifier-v3_default.ckpt"
+    "pfn-model/tabpfn-v3-regressor-v3_default.ckpt"
 )
 
 for checkpoint in "${checkpoints[@]}"; do

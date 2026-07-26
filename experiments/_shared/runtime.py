@@ -11,11 +11,11 @@ from omegaconf import OmegaConf
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 OUTPUTS_ROOT = REPO_ROOT / "outputs"
-MODEL_ROOT = REPO_ROOT / "tabpfn-model"
+MODEL_ROOT = REPO_ROOT / "pfn-model"
 CLASSIFIER_CHECKPOINT_PATH = (
-    MODEL_ROOT / "tabpfn-v2.5-classifier-v2.5_default.ckpt"
+    MODEL_ROOT / "tabpfn-v3-classifier-v3_default.ckpt"
 )
-REGRESSOR_CHECKPOINT_PATH = MODEL_ROOT / "tabpfn-v2.5-regressor-v2.5_default.ckpt"
+REGRESSOR_CHECKPOINT_PATH = MODEL_ROOT / "tabpfn-v3-regressor-v3_default.ckpt"
 
 _figure_override = os.environ.get("UD4PFN_FIGDIR")
 if _figure_override:

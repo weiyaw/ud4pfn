@@ -177,6 +177,81 @@ def test_compute_gn_regressor_low_diversity_prefix(posterior_module):
     )
 
 
+def test_compute_gn_tabicl_classifier_single_class_prefix(posterior_module):
+    predictive_rule = posterior_module.TabICLClassifierPPD(
+        n_estimators=1, allow_auto_download=False
+    )
+    predictive_rule.predict_event = lambda **kwargs: pytest.fail(
+        "predictive rule should not be called"
+    )
+    x_prev = np.array([[0.0], [1.0]], dtype=np.float32)
+    y_prev = np.array([5, 5], dtype=np.int32)
+    x_grid = np.array([[-1.0], [0.0], [1.0]], dtype=np.float32)
+
+    result = posterior_module.compute_gn(
+        predictive_rule, np.array([4, 5]), x_grid, x_prev, y_prev
+    )
+
+    np.testing.assert_array_equal(
+        result, np.array([[0, 0, 0], [1, 1, 1]], dtype=np.float32)
+    )
+
+
+def test_compute_gn_tabicl_regressor_low_diversity_prefix(posterior_module):
+    predictive_rule = posterior_module.TabICLRegressorPPD(
+        n_estimators=1, allow_auto_download=False
+    )
+    predictive_rule.predict_event = lambda **kwargs: pytest.fail(
+        "predictive rule should not be called"
+    )
+    x_prev = np.array([[0.0], [1.0]], dtype=np.float32)
+    y_prev = np.array([0.5, 0.5], dtype=np.float32)
+    x_grid = np.array([[-1.0], [1.0]], dtype=np.float32)
+
+    result = posterior_module.compute_gn(
+        predictive_rule,
+        np.array([0.25, 0.5]),
+        x_grid,
+        x_prev,
+        y_prev,
+    )
+
+    np.testing.assert_array_equal(
+        result, np.array([[0, 0], [1, 1]], dtype=np.float32)
+    )
+
+
+def test_sample_gn_plus_1_supports_tabicl_adapter(posterior_module):
+    import jax.random as jr
+
+    predictive_rule = posterior_module.TabICLRegressorPPD(
+        n_estimators=1, allow_auto_download=False
+    )
+
+    def sample(key, x_new, x_prev, y_prev, size=1):
+        return np.zeros((size, x_new.shape[0]), dtype=np.float32), {}
+
+    def predict_event(t, x_new, x_prev, y_prev):
+        return np.full(
+            (np.atleast_1d(t).size, x_new.shape[0]), 0.5, dtype=np.float32
+        )
+
+    predictive_rule.sample = sample
+    predictive_rule.predict_event = predict_event
+    draws = posterior_module.sample_gn_plus_1(
+        key=jr.key(0),
+        predictive_rule=predictive_rule,
+        t=np.array([0.5]),
+        x_grid=np.zeros((2, 1)),
+        x_prev=np.ones((3, 1)),
+        y_prev=np.arange(3),
+        size=3,
+    )
+
+    assert draws.shape == (3, 1, 2)
+    np.testing.assert_array_equal(draws, 0.5)
+
+
 def test_sample_gn_plus_1_returns_expected_shape(posterior_module):
     import jax.random as jr
 

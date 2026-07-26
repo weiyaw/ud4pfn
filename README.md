@@ -23,16 +23,19 @@ environment and commands run from `experiments/beta_bernoulli/`; see its
 
 ## Model checkpoints
 
-Place the TabPFN v2.5 checkpoints in `tabpfn-model/`:
+Store PFN checkpoints in `pfn-model/`:
 
 ```text
-tabpfn-model/
-├── tabpfn-v2.5-classifier-v2.5_default.ckpt
-└── tabpfn-v2.5-regressor-v2.5_default.ckpt
+pfn-model/
+├── tabpfn-v3-classifier-v3_default.ckpt
+├── tabpfn-v3-regressor-v3_default.ckpt
+├── tabicl-classifier-v2-20260212.ckpt
+└── tabicl-regressor-v2-20260212.ckpt
 ```
 
-The weights are downloaded separately from Prior Labs and are not
-redistributed here.
+The TabPFN weights are downloaded separately from Prior Labs. TabICL downloads
+its official checkpoint from Hugging Face when it is not already available.
+Model weights are not redistributed with this repository.
 
 ## Experiments
 
@@ -124,7 +127,7 @@ uv export --locked --no-dev --no-emit-project --no-hashes \
 ```
 
 The optional `./run-smoke.sh` check is separate from pytest. It requires both
-TabPFN v2.5 checkpoint files shown above and uses TabPFN's automatic device
+TabPFN v3 checkpoint files shown above and uses TabPFN's automatic device
 selection.
 
 ## Data and licensing

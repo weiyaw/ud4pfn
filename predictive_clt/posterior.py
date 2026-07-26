@@ -2,6 +2,7 @@ import jax.random as jr
 import numpy as np
 from tqdm import trange
 
+from .tabicl_adapter import TabICLClassifierPPD, TabICLRegressorPPD
 from .tabpfn_adapter import (
     TabPFNClassifierPPD,
     TabPFNRegressorPPD,
@@ -22,14 +23,18 @@ def compute_gn(predictive_rule, t, x_grid, x_prev, y_prev):
     m = x_grid.shape[0]
 
     # Guard against degenerate or low data
-    if isinstance(predictive_rule, TabPFNClassifierPPD):
+    if isinstance(
+        predictive_rule, (TabPFNClassifierPPD, TabICLClassifierPPD)
+    ):
         if np.min(y_prev) == np.max(y_prev):
             # if all y_prev are the same, then g_n = 1 if t == y_prev[0], 0 otherwise
             probs = (t == y_prev[0]).astype(np.float32)
             return np.broadcast_to(probs[:, None], (t.shape[0], m))
 
     # Guard against degenerate or low data
-    if isinstance(predictive_rule, TabPFNRegressorPPD):
+    if isinstance(
+        predictive_rule, (TabPFNRegressorPPD, TabICLRegressorPPD)
+    ):
         if y_prev.shape[0] < 2 or np.unique(y_prev).size < 2:
             # if all y_prev are the same, then g_n = 1 if t >= y_prev[0], 0 otherwise
             probs = (t >= y_prev[0]).astype(np.float32)
@@ -74,7 +79,7 @@ def compute_g0_to_gn(predictive_rule, t, x_grid, x_prev, y_prev):
 
     Parameters
     ----------
-    predictive_rule : TabPFNClassifierPPD or TabPFNRegressorPPD
+    predictive_rule : classifier or regressor PPD adapter
         Must expose `fit` and `predict_event`.
     t : (p,) array
         Events of the PPD.
@@ -88,9 +93,9 @@ def compute_g0_to_gn(predictive_rule, t, x_grid, x_prev, y_prev):
     Returns
     -------
     g0_to_gn : (n+1, p, m) array
-        If predictive_rule is TabPFNClassifierPPD, g0_to_gn[i, j, k] =
+        For classifier adapters, g0_to_gn[i, j, k] =
         P(Y = t[j] | X=x_grid[k], z_{1:i}).
-        If predictive_rule is TabPFNRegressorPPD, g0_to_gn[i, j, k] =
+        For regressor adapters, g0_to_gn[i, j, k] =
         P(Y <= t[j] | X=x_grid[k], z_{1:i}).
         g0_to_gn[0, :, :] = NaN.
     """
