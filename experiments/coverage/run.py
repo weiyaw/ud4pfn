@@ -14,14 +14,11 @@ from omegaconf import DictConfig, OmegaConf
 from scipy.stats import qmc
 
 from experiments._shared.artifacts import write_pickle
+from experiments._shared.predictive_rule import build_predictive_rule
 from experiments._shared.runtime import (
-    CLASSIFIER_CHECKPOINT_PATH,
-    REGRESSOR_CHECKPOINT_PATH,
     register_githash_resolver,
 )
 from predictive_clt import (
-    TabPFNClassifierPPD,
-    TabPFNRegressorPPD,
     compute_g0_to_gn,
     compute_gn,
     sample_gn_plus_1,
@@ -67,21 +64,6 @@ EXPERIMENT_DEFINITIONS = {
 }
 
 
-def _build_predictive_rule(definition: ExperimentDefinition, n_estimators: int):
-    tabpfn_options = dict(
-        n_estimators=n_estimators,
-        softmax_temperature=1.0,
-        fit_mode="low_memory",
-    )
-    if definition.task == "classification":
-        return TabPFNClassifierPPD(
-            **tabpfn_options, model_path=str(CLASSIFIER_CHECKPOINT_PATH)
-        )
-    return TabPFNRegressorPPD(
-        **tabpfn_options, model_path=str(REGRESSOR_CHECKPOINT_PATH)
-    )
-
-
 def run_experiment(cfg: DictConfig, output_dir: str | Path) -> Path:
     experiment_name = str(cfg.setup)
     if experiment_name not in EXPERIMENT_DEFINITIONS:
@@ -108,7 +90,9 @@ def run_experiment(cfg: DictConfig, output_dir: str | Path) -> Path:
     x_grid = (2.0 * sampler.random(n=int(cfg.x_grid_size)) - 1.0).astype(np.float32)
     t = np.asarray(definition.events)
     output_dir = Path(output_dir)
-    predictive_rule = _build_predictive_rule(definition, int(cfg.n_estimators))
+    predictive_rule = build_predictive_rule(
+        str(cfg.pfn), definition.task, int(cfg.n_estimators)
+    )
     write_pickle(
         output_dir / "data.pickle",
         {

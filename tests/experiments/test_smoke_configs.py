@@ -59,8 +59,10 @@ def test_smoke_config_is_lightweight_and_writes_to_smoke_outputs(group, expected
         assert config[field] == value
     assert config.shuffle_data is True
     assert config.seed == 1000
+    assert config.pfn == "tabpfn"
     assert config.n_estimators == 1
     assert config.mc_samples == 1
+    assert "pfn=tabpfn" in config.hydra.run.dir
     assert config.hydra.run.dir.startswith(
         f"./outputs/smoke/{group.replace('_', '-')}/"
     )

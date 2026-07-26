@@ -2,6 +2,7 @@ defaults:
   - _self_
 
 setup: labour-force
+pfn: tabpfn
 x_grid_size: 100
 shuffle_data: true
 seed: 1000
@@ -13,7 +14,7 @@ git: ${githash:}
 
 hydra:
   run:
-    dir: "./outputs/${id}/setup=${setup} shuffle=${shuffle_data} n_est=${n_estimators} m=${x_grid_size} seed=${seed}"
+    dir: "./outputs/${id}/setup=${setup} pfn=${pfn} shuffle=${shuffle_data} n_est=${n_estimators} m=${x_grid_size} seed=${seed}"
   sweep:
     dir: ${hydra.run.dir}
     subdir: .

@@ -2,6 +2,7 @@ defaults:
   - _self_
 
 setup: gaussian-linear
+pfn: tabpfn
 data_size: 200
 x_grid_size: 100
 x_design: one-gap
@@ -16,7 +17,7 @@ git: ${githash:}
 
 hydra:
   run:
-    dir: "./outputs/${id}/setup=${setup} x_design=${x_design} shuffle=${shuffle_data} n_est=${n_estimators} n=${data_size} m=${x_grid_size} seed=${seed}"
+    dir: "./outputs/${id}/setup=${setup} pfn=${pfn} x_design=${x_design} shuffle=${shuffle_data} n_est=${n_estimators} n=${data_size} m=${x_grid_size} seed=${seed}"
   sweep:
     dir: ${hydra.run.dir}
     subdir: .

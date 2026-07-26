@@ -15,12 +15,9 @@ import torch
 from omegaconf import DictConfig, OmegaConf
 
 from experiments._shared.artifacts import write_pickle
-from experiments._shared.runtime import (
-    CLASSIFIER_CHECKPOINT_PATH,
-    register_githash_resolver,
-)
+from experiments._shared.predictive_rule import build_predictive_rule
+from experiments._shared.runtime import register_githash_resolver
 from predictive_clt import (
-    TabPFNClassifierPPD,
     compute_g0_to_gn,
     compute_gn,
     sample_gn_plus_1,
@@ -67,11 +64,8 @@ def run_experiment(cfg: DictConfig, output_dir: str | Path) -> Path:
     t = np.asarray(definition.events)
     output_dir = Path(output_dir)
 
-    predictive_rule = TabPFNClassifierPPD(
-        n_estimators=int(cfg.n_estimators),
-        softmax_temperature=1.0,
-        fit_mode="low_memory",
-        model_path=str(CLASSIFIER_CHECKPOINT_PATH),
+    predictive_rule = build_predictive_rule(
+        str(cfg.pfn), definition.task, int(cfg.n_estimators)
     )
     write_pickle(
         output_dir / "data.pickle",

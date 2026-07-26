@@ -14,10 +14,11 @@ class DummyPredictiveRule:
 
 def install_stubs(monkeypatch, module):
     monkeypatch.setattr(
-        module, "TabPFNClassifierPPD", DummyPredictiveRule, raising=False
-    )
-    monkeypatch.setattr(
-        module, "TabPFNRegressorPPD", DummyPredictiveRule, raising=False
+        module,
+        "build_predictive_rule",
+        lambda pfn, task, n_estimators: DummyPredictiveRule(
+            pfn=pfn, task=task, n_estimators=n_estimators
+        ),
     )
 
     def gn(predictive_rule, t, x_grid, x_prev, y_prev):
@@ -48,8 +49,9 @@ def install_stubs(monkeypatch, module):
         ),
     ],
 )
+@pytest.mark.parametrize("pfn", ["tabpfn", "tabicl"])
 def test_synthetic_runners_write_preserved_schema(
-    monkeypatch, tmp_path, module_name, setup, extra
+    monkeypatch, tmp_path, module_name, setup, extra, pfn
 ):
     module = __import__(f"experiments.{module_name}.run", fromlist=["run"])
     install_stubs(monkeypatch, module)
@@ -57,6 +59,7 @@ def test_synthetic_runners_write_preserved_schema(
     config = OmegaConf.create(
         {
             "setup": setup,
+            "pfn": pfn,
             "data_size": data_size,
             "x_grid_size": 4,
             "shuffle_data": True,
@@ -93,6 +96,7 @@ def test_entropic_vary_n_omits_monte_carlo_artifact(monkeypatch, tmp_path):
     config = OmegaConf.create(
         {
             "setup": "logistic-linear",
+            "pfn": "tabpfn",
             "data_size": 6,
             "x_grid_size": 4,
             "x_design": "gaussian:1.5:3.0",
@@ -128,22 +132,24 @@ def test_real_runner_supports_both_setups_without_network(monkeypatch, tmp_path)
             for name, definition in original.items()
         },
     )
-    for experiment_name in original:
-        output_dir = tmp_path / experiment_name
-        config = OmegaConf.create(
-            {
-                "setup": experiment_name,
-                "x_grid_size": 4,
-                "shuffle_data": True,
-                "seed": 1000,
-                "n_estimators": 2,
-                "mc_samples": 3,
-            }
-        )
-        run.run_experiment(config, output_dir)
-        assert not (output_dir / "setup.pickle").exists()
-        assert read_pickle(output_dir / "data.pickle")["y_prev"].shape == (3,)
-        assert read_pickle(output_dir / "gn.pickle").shape == (2, 4)
+    for pfn in ("tabpfn", "tabicl"):
+        for experiment_name in original:
+            output_dir = tmp_path / pfn / experiment_name
+            config = OmegaConf.create(
+                {
+                    "setup": experiment_name,
+                    "pfn": pfn,
+                    "x_grid_size": 4,
+                    "shuffle_data": True,
+                    "seed": 1000,
+                    "n_estimators": 2,
+                    "mc_samples": 3,
+                }
+            )
+            run.run_experiment(config, output_dir)
+            assert not (output_dir / "setup.pickle").exists()
+            assert read_pickle(output_dir / "data.pickle")["y_prev"].shape == (3,)
+            assert read_pickle(output_dir / "gn.pickle").shape == (2, 4)
 
 
 @pytest.mark.parametrize(
@@ -155,6 +161,7 @@ def test_runner_errors_list_supported_setups(tmp_path, module_name):
     config = OmegaConf.create(
         {
             "setup": "unsupported",
+            "pfn": "tabpfn",
             "x_design": "one-gap",
             "seed": 0,
         }

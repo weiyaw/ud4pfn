@@ -51,6 +51,17 @@ reproduction notes.
 | Real analysis | `uv run python -m experiments.real_analysis.run ...` | `uv run python -m experiments.real_analysis.plot` |
 | Beta--Bernoulli | separate local workflow | [README](experiments/beta_bernoulli/README.md) |
 
+The four main runners use TabPFN by default. Select TabICL with the Hydra
+override `pfn=tabicl`, for example:
+
+```bash
+uv run python -m experiments.gap.run pfn=tabicl setup=gaussian-linear
+```
+
+Run directories include the selected `pfn` value so artifacts from TabPFN and
+TabICL do not overwrite one another. TabICL uses the checkpoint paths shown
+above and downloads missing official checkpoints to `pfn-model/`.
+
 `run-experiments.sh` contains the complete paper sweeps for the four root-`uv`
 experiment groups. It does not invoke Beta--Bernoulli.
 

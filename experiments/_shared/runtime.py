@@ -11,11 +11,23 @@ from omegaconf import OmegaConf
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 OUTPUTS_ROOT = REPO_ROOT / "outputs"
-MODEL_ROOT = REPO_ROOT / "pfn-model"
-CLASSIFIER_CHECKPOINT_PATH = (
-    MODEL_ROOT / "tabpfn-v3-classifier-v3_default.ckpt"
+PFN_ROOT = REPO_ROOT / "pfn-model"
+TABPFN_CLASSIFIER_CHECKPOINT_PATH = (
+    PFN_ROOT / "tabpfn-v3-classifier-v3_default.ckpt"
 )
-REGRESSOR_CHECKPOINT_PATH = MODEL_ROOT / "tabpfn-v3-regressor-v3_default.ckpt"
+TABPFN_REGRESSOR_CHECKPOINT_PATH = (
+    PFN_ROOT / "tabpfn-v3-regressor-v3_default.ckpt"
+)
+TABICL_CLASSIFIER_CHECKPOINT_PATH = (
+    PFN_ROOT / "tabicl-classifier-v2-20260212.ckpt"
+)
+TABICL_REGRESSOR_CHECKPOINT_PATH = (
+    PFN_ROOT / "tabicl-regressor-v2-20260212.ckpt"
+)
+
+# Backwards-compatible aliases used by the TabPFN-only coverage baselines.
+CLASSIFIER_CHECKPOINT_PATH = TABPFN_CLASSIFIER_CHECKPOINT_PATH
+REGRESSOR_CHECKPOINT_PATH = TABPFN_REGRESSOR_CHECKPOINT_PATH
 
 _figure_override = os.environ.get("UD4PFN_FIGDIR")
 if _figure_override:
@@ -52,7 +64,11 @@ __all__ = [
     "REPO_ROOT",
     "OUTPUTS_ROOT",
     "FIGURES_ROOT",
-    "MODEL_ROOT",
+    "PFN_ROOT",
+    "TABPFN_CLASSIFIER_CHECKPOINT_PATH",
+    "TABPFN_REGRESSOR_CHECKPOINT_PATH",
+    "TABICL_CLASSIFIER_CHECKPOINT_PATH",
+    "TABICL_REGRESSOR_CHECKPOINT_PATH",
     "CLASSIFIER_CHECKPOINT_PATH",
     "REGRESSOR_CHECKPOINT_PATH",
     "githash",
