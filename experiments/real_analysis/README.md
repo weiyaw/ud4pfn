@@ -9,6 +9,16 @@ uv run python -m experiments.real_analysis.run setup=fibre-strength
 uv run python -m experiments.real_analysis.plot
 ```
 
+Run the lightweight, network-free actual-checkpoint smoke case with:
+
+```bash
+uv run python -m experiments.real_analysis.run --config-name smoke
+```
+
+It uses the full local fibre-strength data with two evaluation points, one
+estimator, and one Monte Carlo draw. Artifacts are written under
+`outputs/smoke/real-analysis/`.
+
 The labour-force computation downloads the Mroz dataset and therefore requires
 network access. Fibre data is stored beside this module. Plotting either setup
 from cached artifacts requires no network access.

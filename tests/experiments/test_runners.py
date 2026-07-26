@@ -142,6 +142,7 @@ def test_real_runner_supports_both_setups_without_network(monkeypatch, tmp_path)
         )
         run.run_experiment(config, output_dir)
         assert not (output_dir / "setup.pickle").exists()
+        assert read_pickle(output_dir / "data.pickle")["y_prev"].shape == (3,)
         assert read_pickle(output_dir / "gn.pickle").shape == (2, 4)
 
 

@@ -9,6 +9,16 @@ uv run python -m experiments.entropic_ud.run --config-name vary_n
 uv run python -m experiments.entropic_ud.plot
 ```
 
+Run the lightweight actual-checkpoint smoke case with:
+
+```bash
+uv run python -m experiments.entropic_ud.run --config-name smoke
+```
+
+It uses `two-moons-1` with four observations, a two-by-two evaluation grid,
+one estimator, and one Monte Carlo draw. Artifacts are written under
+`outputs/smoke/entropic-ud/`.
+
 Supported setups are `logistic-linear`, `two-moons-1`, `two-moons-2`, and
 `spiral`. Cached artifacts map to these paper figures:
 

@@ -8,6 +8,16 @@ uv run python -m experiments.gap.run setup=gaussian-linear data_size=200
 uv run python -m experiments.gap.plot
 ```
 
+Run the lightweight actual-checkpoint smoke case with:
+
+```bash
+uv run python -m experiments.gap.run --config-name smoke
+```
+
+It uses the Gaussian linear setup with four observations, two evaluation
+points, one estimator, and one Monte Carlo draw. Artifacts are written under
+`outputs/smoke/gap/`.
+
 The paper sweep uses sample sizes 200, 500, and 1000, seed 1000,
 `n_estimators=64`, a 100-point grid on `[-10,10]`, and 1000 Monte Carlo draws.
 The plotter writes:

@@ -1,0 +1,14 @@
+defaults:
+  - run
+  - _self_
+
+setup: gaussian-linear
+data_size: 4
+x_grid_size: 2
+x_design: one-gap
+shuffle_data: true
+fix_data: false
+seed: 1000
+n_estimators: 1
+mc_samples: 1
+id: smoke/gap

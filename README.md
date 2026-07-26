@@ -51,6 +51,16 @@ reproduction notes.
 `run-experiments.sh` contains the complete paper sweeps for the four root-`uv`
 experiment groups. It does not invoke Beta--Bernoulli.
 
+For a lightweight end-to-end check with the actual TabPFN checkpoints, run:
+
+```bash
+./run-smoke.sh
+```
+
+This runs one network-free case from each root-`uv` experiment group with one
+estimator and one Monte Carlo draw. Smoke artifacts are retained under
+`outputs/smoke/`.
+
 ## Artifact contract
 
 Numerical outputs remain centrally located under:
@@ -112,6 +122,10 @@ requirements export:
 uv export --locked --no-dev --no-emit-project --no-hashes \
   --output-file requirements.txt
 ```
+
+The optional `./run-smoke.sh` check is separate from pytest. It requires both
+TabPFN v2.5 checkpoint files shown above and uses TabPFN's automatic device
+selection.
 
 ## Data and licensing
 

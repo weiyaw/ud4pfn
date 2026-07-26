@@ -1,0 +1,11 @@
+defaults:
+  - run
+  - _self_
+
+setup: fibre-strength
+x_grid_size: 2
+shuffle_data: true
+seed: 1000
+n_estimators: 1
+mc_samples: 1
+id: smoke/real-analysis
