@@ -1,0 +1,17 @@
+================ shared-Z VUD on TabPFN: spiral ================
+n=200 classes=3 grid=3600 aux lattice=9 mc_u=16 est=8
+NOTE: shared lattice Z is OUR simplification; the VUD reference toy classification runs use per-query perturbation about x* (see docstring).
+wall-clock: CLT side 488s, VUD side 149s
+fraction of grid with VUD epistemic LB < 0: 0.834
+fraction with Va > H_total at z>2: 0.734   at z>3: 0.679
+Spearman(epis CLT, epis VUD raw)  = -0.047
+Spearman(epis CLT, epis VUD clip) = 0.279
+Spearman(alea CLT, Va)            = 0.893
+
+         probe | pmax(cls) |  total | episCLT |     Va |  Va_se | episVUD |      z
+    arm 0 core |  1.00(0) |  0.010 |   0.010 |  0.008 |  0.000 |   0.002 |   -7.7
+    arm 1 core |  1.00(1) |  0.033 |   0.033 |  0.043 |  0.003 |  -0.010 |    3.6
+    arm 2 core |  0.97(2) |  0.136 |   0.136 |  0.270 |  0.013 |  -0.134 |   10.1
+ inter-arm gap |  0.58(2) |  0.756 |   0.314 |  0.741 |  0.004 |   0.015 |   -4.3
+        centre |  0.59(1) |  0.900 |   0.251 |  0.934 |  0.016 |  -0.033 |    2.0
+    far corner |  0.49(1) |  1.029 |   0.049 |  1.039 |  0.001 |  -0.010 |    9.8
