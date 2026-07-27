@@ -9,7 +9,7 @@ x_design: sobol-10d
 shuffle_data: true
 fix_data: false
 seed: 1000
-n_estimators: 16
+n_estimators: 8
 mc_samples: 1000
 id: coverage
 lastrun: ${now:%Y-%m-%dT%H:%M:%S%z}

@@ -6,7 +6,7 @@ pfn: tabpfn
 x_grid_size: 100
 shuffle_data: true
 seed: 1000
-n_estimators: 64
+n_estimators: 8
 mc_samples: 1000
 id: real-analysis
 lastrun: ${now:%Y-%m-%dT%H:%M:%S%z}

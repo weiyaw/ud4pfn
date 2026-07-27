@@ -19,7 +19,7 @@ points, one estimator, and one Monte Carlo draw. Artifacts are written under
 `outputs/smoke/gap/`.
 
 The paper sweep uses sample sizes 200, 500, and 1000, seed 1000,
-`n_estimators=64`, a 100-point grid on `[-10,10]`, and 1000 Monte Carlo draws.
+`n_estimators=8`, a 100-point grid on `[-10,10]`, and 1000 Monte Carlo draws.
 The plotter writes:
 
 - `gap-gaussian-linear.pdf`
