@@ -12,3 +12,7 @@ tabpfn-model/
 .venv/
 beta_bernoulli/checkpoints/
 /outputs
+
+# internal timing notes (contain cluster paths) — never commit
+rebuttal/timing_methods.md
+results_timing_cpu/
