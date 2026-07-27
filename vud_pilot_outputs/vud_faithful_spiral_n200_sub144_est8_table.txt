@@ -1,0 +1,17 @@
+================ faithful VUD on TabPFN: spiral ================
+n=200 classes=3 CLT grid=3600 VUD subgrid=144 K=15 keep=5 est=8
+wall-clock: CLT side 1850s, VUD side 4787s
+candidates with Va > H_total (coherence violation): 0.261
+points where ALL 15 candidates violate:   0.042
+points with negative max_Ve AFTER their KL-rank+min aggregation: 0.056
+forward KL (coherence meter): median=0.0037  90%=0.0521  max=0.5486
+Spearman(epis CLT, max_Ve raw)  = 0.283
+Spearman(epis CLT, max_Ve clip) = 0.283
+
+         probe | pmax(cls) |  total | episCLT |  minVa |   maxVe | #viol/15 |  medKL
+    arm 0 core |  1.00(0) |  0.015 |   0.015 |  0.012 |   0.003 |       11 | 0.0001
+    arm 1 core |  0.98(1) |  0.090 |   0.088 |  0.057 |   0.032 |        9 | 0.0025
+    arm 2 core |  0.56(1) |  0.804 |   0.227 |  0.612 |   0.192 |        2 | 0.0076
+ inter-arm gap |  1.00(0) |  0.015 |   0.015 |  0.012 |   0.003 |       11 | 0.0001
+        centre |  0.44(1) |  1.014 |   0.230 |  1.006 |   0.008 |       11 | 0.0008
+    far corner |  0.52(1) |  1.002 |   0.072 |  0.406 |   0.596 |        0 | 0.0020
