@@ -34,11 +34,6 @@ evaluated points); the later script names by evaluated-point count
 (`sub144` = 144 of the 3600-point CLT grid for the spiral; `sub151` = the
 full 151-point grid for logistic-linear).
 
-`vud_pilot_shared2.py` and the `vud_shared_*` outputs are a variant that
-shares one candidate lattice across query points instead of perturbing about
-each x*; it is not used in any reported number and is retained to document
-sensitivity to the auxiliary-query strategy.
-
 `vud_bb_pilot.py` / `vud_bb_timing.py` run the same comparison on the
 Beta-Bernoulli model of Appendix H.
 
