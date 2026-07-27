@@ -2,8 +2,10 @@
 
 from __future__ import annotations
 
+import logging
 from dataclasses import dataclass
 from pathlib import Path
+from timeit import default_timer as timer
 from typing import Callable, Literal
 
 import hydra
@@ -98,11 +100,21 @@ def run_experiment(cfg: DictConfig, output_dir: str | Path) -> Path:
             ),
         },
     )
+    start = timer()
     gn = compute_gn(predictive_rule, t, x_grid, x_prev, y_prev)
+    elapsed = timer() - start
     write_pickle(output_dir / "gn.pickle", gn)
+    logging.info("Built gn in %.2f seconds", elapsed)
+
+    start = timer()
     g0_to_gn = compute_g0_to_gn(predictive_rule, t, x_grid, x_prev, y_prev)
+    elapsed = timer() - start
     write_pickle(output_dir / "g0_to_gn.pickle", g0_to_gn)
-    if int(cfg.mc_samples) > 0:
+    logging.info("Built g0_to_gn in %.2f seconds", elapsed)
+
+    mc_samples = int(cfg.mc_samples)
+    if mc_samples > 0:
+        start = timer()
         gn_plus_1 = sample_gn_plus_1(
             key_others,
             predictive_rule,
@@ -110,15 +122,21 @@ def run_experiment(cfg: DictConfig, output_dir: str | Path) -> Path:
             x_grid,
             x_prev,
             y_prev,
-            size=int(cfg.mc_samples),
+            size=mc_samples,
         )
+        elapsed = timer() - start
         write_pickle(output_dir / "gn_plus_1.pickle", gn_plus_1)
+        logging.info("Built gn_plus_1 in %.2f seconds", elapsed)
+    else:
+        logging.info("mc_samples=%d, skipping gn_plus_1", mc_samples)
     return output_dir
 
 
 @hydra.main(version_base=None, config_path="conf", config_name="run")
 def main(cfg: DictConfig) -> None:
     OmegaConf.resolve(cfg)
+    logging.info("Hydra version: %s", hydra.__version__)
+    logging.info(OmegaConf.to_yaml(cfg))
     output_dir = hydra.core.hydra_config.HydraConfig.get().runtime.output_dir
     run_experiment(cfg, output_dir)
 
