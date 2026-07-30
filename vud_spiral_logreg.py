@@ -1,6 +1,6 @@
 # %%
-"""Faithful VUD replication on TabPFN — Spiral (3 classes) and LogisticLinear —
-extending vud_pilot_faithful.py (Two Moons) with the identical recipe from
+"""VUD on TabPFN — Spiral (3 classes) and LogisticLinear —
+extending vud_two_moons.py (Two Moons) with the identical recipe from
 github.com/jacobyhsi/VUD (run_toy_classification.py + src/utils.calculate_min_Va_by_KL_rank):
 
   - K = 15 single-point z candidates per test point, drawn by perturbation
@@ -19,14 +19,14 @@ multiclass Dirichlet-matched entropy functions for the spiral).
 Data and grid replicate the paper's entropic-ud conventions
 (run-experiments.sh + run-ghat.py):
   spiral:          n=200, seed=1000, fix_data=False, x_design=None,
-                   grid [-4,4]^2 (paper m=100 per axis; pilot uses 60)
+                   grid [-4,4]^2 (paper m=100 per axis; this script uses 60)
   logistic-linear: n=75 (paper panels 15/50/75/150), seed=1000, fix_data=True
                    (data key jr.key(6683)), x_design="gaussian:1.5:3.0",
                    grid np.linspace(-15,15,151)  [same as Jayasekera et al 2025]
 
 Deviations, stated: no L-permutation ensembling (TabPFN is permutation
 invariant over context rows), no LLM prompt serialisation, n_estimators=8
-(the Two Moons pilot setting; the paper's panels use 64).
+(the Two Moons setting; the paper's panels use 64).
 """
 import argparse
 import sys
@@ -70,7 +70,7 @@ parser.add_argument("--perturbation-std", type=float, default=0.1)
 parser.add_argument("--n-estimators", type=int, default=8)
 parser.add_argument("--model-path", type=str,
                     default="tabpfn-model/tabpfn-v2.5-classifier-v2.5_default.ckpt")
-parser.add_argument("--outdir", type=str, default="vud_pilot_outputs")
+parser.add_argument("--outdir", type=str, default="vud_outputs")
 args, _ = parser.parse_known_args()
 
 EPS = 1e-12
@@ -207,7 +207,7 @@ def log(msg):
     summary.append(msg)
 
 
-log(f"================ faithful VUD on TabPFN: {args.setup} ================")
+log(f"================ VUD on TabPFN: {args.setup} ================")
 log(f"n={n} classes={C} CLT grid={x_grid.shape[0]} VUD subgrid={msub} "
     f"K={args.num_z} keep={args.num_valid_va} est={args.n_estimators}")
 log(f"wall-clock: CLT side {clt_seconds:.0f}s, VUD side {vud_seconds:.0f}s")
@@ -234,7 +234,7 @@ for name, xy in probes.items():
 outdir = REPO_ROOT / args.outdir
 outdir.mkdir(parents=True, exist_ok=True)
 slug = "spiral" if args.setup == "spiral" else "logistic"
-stem = f"vud_faithful_{slug}_n{n}_sub{msub}_est{args.n_estimators}"
+stem = f"vud_{slug}_n{n}_sub{msub}_est{args.n_estimators}"
 np.savez(outdir / f"{stem}.npz",
          x_grid=x_grid, gn_all=gn_all, sigma2=sigma2, total_entropy=total_entropy,
          alea_clt=alea_clt, epis_clt=epis_clt, sub_idx=sub_idx, x_sub=x_sub,
@@ -293,7 +293,7 @@ else:
     ax.legend()
     for a in axes.ravel():
         a.set_xlabel("x")
-fig.suptitle(f"Faithful VUD on TabPFN — {args.setup}, n={n}, K={args.num_z}, "
+fig.suptitle(f"VUD on TabPFN — {args.setup}, n={n}, K={args.num_z}, "
              f"est={args.n_estimators}")
 fig.savefig(outdir / f"{stem}.png", dpi=150)
 print(f"\nsaved {stem}.npz / _table.txt / .png to {outdir}")

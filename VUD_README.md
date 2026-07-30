@@ -1,6 +1,6 @@
 # VUD-on-TabPFN comparison (rebuttal experiments)
 
-This branch adds a faithful replication of Variational Uncertainty Decomposition
+This branch adds a replication of Variational Uncertainty Decomposition
 (VUD; Jayasekera et al., 2025, arXiv:2509.02327, code github.com/jacobyhsi/VUD)
 applied to TabPFN, compared against the paper's predictive-CLT decomposition on
 the same data, grids, and TabPFN checkpoints.
@@ -18,16 +18,25 @@ context orderings (TabPFN is row invariant) and no prompt serialisation
 
 ## Scripts and outputs
 
-| Setting | Script | Command | Output stem (in `vud_pilot_outputs/`) |
+| Setting | Script | Command | Output stem (in `vud_outputs/`) |
 |---|---|---|---|
-| Two Moons, n=100 | `vud_pilot_faithful.py` | `python vud_pilot_faithful.py` | `vud_faithful_n100_sub12_est8` |
-| Three-class spiral, n=200 | `vud_pilot_faithful2.py` | `python vud_pilot_faithful2.py --setup spiral` | `vud_faithful_spiral_n200_sub144_est8` |
-| Logistic-linear, n=75 | `vud_pilot_faithful2.py` | `python vud_pilot_faithful2.py --setup logistic-linear` | `vud_faithful_logistic_n75_sub151_est8` |
+| Two Moons, n=100 | `vud_two_moons.py` | `python vud_two_moons.py` | `vud_two_moons_n100_sub12_est8` |
+| Three-class spiral, n=200 | `vud_spiral_logreg.py` | `python vud_spiral_logreg.py --setup spiral` | `vud_spiral_n200_sub144_est8` |
+| Logistic-linear, n=75 | `vud_spiral_logreg.py` | `python vud_spiral_logreg.py --setup logistic-linear` | `vud_logistic_n75_sub151_est8` |
+
+The Two Moons experiment was run first; `vud_spiral_logreg.py` applies the
+identical recipe to the paper's other two settings and computes the CLT side
+in-script with the paper's pipeline. The two scripts will eventually be
+merged. `vud_two_moons.py` reads its data, evaluation grid, and CLT-side
+values from `vud_outputs/two_moons_inputs_n100_grid60_est8.npz` (committed;
+arrays `x_prev`/`y_prev` are the training data, `x_grid` the 60x60 grid,
+`gn`/`total_entropy`/`epis_clt` the paper pipeline's values at
+n_estimators=8).
 
 Each run writes a `.npz` (per-point arrays: `H_sub` total entropy,
 `epis_clt_sub` CLT epistemic component, `Va` per-candidate aleatoric bounds,
 `KLf` per-candidate coherence scores, `minVa`, `maxVe_raw`) and a `.png`
-(side-by-side maps). The `vud_pilot_faithful2.py` runs additionally write a
+(side-by-side maps). The `vud_spiral_logreg.py` runs additionally write a
 `_table.txt` (summary statistics and probe rows); the Two Moons statistics
 are computed from the `.npz` arrays as described in the last section.
 

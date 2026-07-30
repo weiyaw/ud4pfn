@@ -1,5 +1,5 @@
 # %%
-"""Faithful VUD replication on TabPFN (Two Moons 1, n=100), following the
+"""VUD on TabPFN (Two Moons 1, n=100), following the
 reference implementation at github.com/jacobyhsi/VUD (run_toy_classification.py
 + eval/eval_toy_2d_class.ipynb + src/utils.calculate_min_Va_by_KL_rank):
 
@@ -21,7 +21,7 @@ Deviations, stated: no L-permutation ensembling (TabPFN is permutation
 invariant over context rows), no LLM prompt serialisation (numeric rows are
 TabPFN's native interface).
 
-CLT side is read from the shared-Z pilot's saved npz (same model settings)
+CLT side is read from the saved inputs npz (same model settings)
 by subsampling its grid.
 """
 import argparse
@@ -46,9 +46,9 @@ parser.add_argument("--sub-stride", type=int, default=5, help="stride into the 6
 parser.add_argument("--n-estimators", type=int, default=8)
 parser.add_argument("--model-path", type=str,
                     default="tabpfn-model/tabpfn-v2.5-classifier-v2.5_default.ckpt")
-parser.add_argument("--prev-npz", type=str,
-                    default="outputs/vud-pilot/vud_pilot_n100_grid60_est8.npz")
-parser.add_argument("--outdir", type=str, default="outputs/vud-pilot")
+parser.add_argument("--inputs-npz", type=str,
+                    default="vud_outputs/two_moons_inputs_n100_grid60_est8.npz")
+parser.add_argument("--outdir", type=str, default="vud_outputs")
 args, _ = parser.parse_known_args()
 
 rng = np.random.default_rng(20260725)
@@ -62,8 +62,8 @@ def binary_kl(p, q):
     p = np.clip(p, EPS, 1 - EPS); q = np.clip(q, EPS, 1 - EPS)
     return p * np.log(p / q) + (1 - p) * np.log((1 - p) / (1 - q))
 
-# ------------------------------------------------- load shared-Z pilot artifacts
-prev = np.load(REPO_ROOT / args.prev_npz)
+# ------------------------------------------------- load input artifacts
+prev = np.load(REPO_ROOT / args.inputs_npz)
 x_prev, y_prev = prev["x_prev"], prev["y_prev"]
 n = y_prev.size
 gs = int(np.sqrt(prev["x_grid"].shape[0]))
@@ -119,7 +119,7 @@ maxVe_clip = np.maximum(maxVe_raw, 0.0)                  # their plot's vmin=0
 # ------------------------------------------------- violation + coherence statistics
 viol_cand = (Va > H_sub[:, None])                        # exact, no MC noise
 from scipy.stats import spearmanr
-print("\n================ faithful VUD on TabPFN ================")
+print("\n================ VUD on TabPFN ================")
 print(f"candidates with Va > H_total (coherence violation): {viol_cand.mean():.3f}")
 print(f"points where ALL 15 candidates violate:             {viol_cand.all(axis=1).mean():.3f}")
 print(f"points with negative max_Ve AFTER their KL-rank+min aggregation: {(maxVe_raw < 0).mean():.3f}")
@@ -137,7 +137,7 @@ for name, xy in probes.items():
 
 outdir = REPO_ROOT / args.outdir
 outdir.mkdir(parents=True, exist_ok=True)
-np.savez(outdir / f"vud_faithful_n{n}_sub{len(sub_axes)}_est{args.n_estimators}.npz",
+np.savez(outdir / f"vud_two_moons_n{n}_sub{len(sub_axes)}_est{args.n_estimators}.npz",
          x_sub=x_sub, gn_sub=gn_sub, H_sub=H_sub, epis_clt_sub=epis_clt_sub,
          all_Z=all_Z, p_u_all=p_u_all, Va=Va, KLf=KLf,
          minVa=minVa, maxVe_raw=maxVe_raw, maxVe_clip=maxVe_clip)
@@ -158,6 +158,6 @@ for ax, (title, f, vmin) in zip(axes.ravel(), panels):
                edgecolors="k", linewidths=0.2)
     ax.set_title(title)
     fig.colorbar(im, ax=ax)
-fig.suptitle(f"Faithful VUD on TabPFN — Two Moons 1, n={n}, K={args.num_z}, est={args.n_estimators}")
-fig.savefig(outdir / f"vud_faithful_n{n}_sub{len(sub_axes)}_est{args.n_estimators}.png", dpi=150)
+fig.suptitle(f"VUD on TabPFN — Two Moons 1, n={n}, K={args.num_z}, est={args.n_estimators}")
+fig.savefig(outdir / f"vud_two_moons_n{n}_sub{len(sub_axes)}_est{args.n_estimators}.png", dpi=150)
 print(f"\nsaved to {outdir}")
