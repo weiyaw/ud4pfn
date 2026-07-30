@@ -137,7 +137,7 @@ for name, xy in probes.items():
 
 outdir = REPO_ROOT / args.outdir
 outdir.mkdir(parents=True, exist_ok=True)
-np.savez(outdir / f"vud_two_moons_n{n}_sub{len(sub_axes)}_est{args.n_estimators}.npz",
+np.savez(outdir / f"vud_two_moons_n{n}_sub{m}_est{args.n_estimators}.npz",
          x_sub=x_sub, gn_sub=gn_sub, H_sub=H_sub, epis_clt_sub=epis_clt_sub,
          all_Z=all_Z, p_u_all=p_u_all, Va=Va, KLf=KLf,
          minVa=minVa, maxVe_raw=maxVe_raw, maxVe_clip=maxVe_clip)
@@ -159,5 +159,5 @@ for ax, (title, f, vmin) in zip(axes.ravel(), panels):
     ax.set_title(title)
     fig.colorbar(im, ax=ax)
 fig.suptitle(f"VUD on TabPFN — Two Moons 1, n={n}, K={args.num_z}, est={args.n_estimators}")
-fig.savefig(outdir / f"vud_two_moons_n{n}_sub{len(sub_axes)}_est{args.n_estimators}.png", dpi=150)
+fig.savefig(outdir / f"vud_two_moons_n{n}_sub{m}_est{args.n_estimators}.png", dpi=150)
 print(f"\nsaved to {outdir}")
