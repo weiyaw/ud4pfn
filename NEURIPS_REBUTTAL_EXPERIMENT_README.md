@@ -1,7 +1,10 @@
 # Archive: VUD-on-Beta-Bernoulli and early diagnostic material
 
-Base: submission code plus the post-submission Beta-Bernoulli figure
-amendments (branch point `2523e06`).
+Base: `2523e06` = `neurips-2026-submission` (`994fab4`) plus the 16
+post-submission cleanup commits (`git log 994fab4..2523e06`: figure
+legibility and Beta-Bernoulli diagnostic-figure fixes, MIT license, root
+README rewritten as a reproduction guide, run-copula seed fix, gitignore
+and path hygiene).
 
 ## 1. What we are trying to do
 
