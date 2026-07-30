@@ -13,7 +13,7 @@ Not cited in any posted reply:
   exact.
 - `beta_bernoulli/supstat_tsplit.py`, `rebuttal/supstat_tsplit.md` —
   finite-horizon sup statistics and T-split condition summaries from the
-  saved diagnostics (also on the `h9jb` branch; sup-statistic numbers were
+  saved diagnostics (on the `h9jb` branch as `evaluate_conditions.py` / `rebuttal/condition_tables.md`; sup-statistic numbers were
   deliberately left out of the posted rebuttal). Based on the 16 saved
   rollouts — h9jB has since asked for ~200, so regenerate before quoting.
 
