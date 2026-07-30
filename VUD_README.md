@@ -26,8 +26,10 @@ context orderings (TabPFN is row invariant) and no prompt serialisation
 
 Each run writes a `.npz` (per-point arrays: `H_sub` total entropy,
 `epis_clt_sub` CLT epistemic component, `Va` per-candidate aleatoric bounds,
-`KLf` per-candidate coherence scores, `minVa`, `maxVe_raw`), a `.png`
-(side-by-side maps), and a `_table.txt` (summary statistics and probe rows).
+`KLf` per-candidate coherence scores, `minVa`, `maxVe_raw`) and a `.png`
+(side-by-side maps). The `vud_pilot_faithful2.py` runs additionally write a
+`_table.txt` (summary statistics and probe rows); the Two Moons statistics
+are computed from the `.npz` arrays as described in the last section.
 
 Naming note: the Two Moons stem says `sub12` (subgrid stride, 12x12 = 144
 evaluated points); the later script names by evaluated-point count
