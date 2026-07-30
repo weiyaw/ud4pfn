@@ -25,8 +25,8 @@ Beta-Bernoulli diagnostic dumps (diag_*.pt: per-rollout y, f_prev, b, delta).
     min/median/max across rollouts.
 
 Usage (from the repo root):
-    python beta_bernoulli/supstat_tsplit.py \
-        --out rebuttal/supstat_tsplit.md
+    python beta_bernoulli/evaluate_conditions.py \
+        --out rebuttal/condition_tables.md
 """
 from __future__ import annotations
 
@@ -111,7 +111,7 @@ def mmm(v: np.ndarray) -> str:
 
 def main() -> None:
     p = argparse.ArgumentParser()
-    p.add_argument("--out", type=str, default="rebuttal/supstat_tsplit.md")
+    p.add_argument("--out", type=str, default="rebuttal/condition_tables.md")
     args = p.parse_args()
 
     lines: list[str] = []
