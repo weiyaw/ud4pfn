@@ -36,9 +36,6 @@ evaluated points); the later script names by evaluated-point count
 (`sub144` = 144 of the 3600-point CLT grid for the spiral; `sub151` = the
 full 151-point grid for logistic-linear).
 
-`vud_bb_pilot.py` / `vud_bb_timing.py` run the same comparison on the
-Beta-Bernoulli model of Appendix H.
-
 ## Reproducing the reported statistics
 
 The violation and correlation statistics quoted in the author response are
