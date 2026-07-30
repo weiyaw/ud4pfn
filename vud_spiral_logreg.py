@@ -234,7 +234,7 @@ for name, xy in probes.items():
 outdir = REPO_ROOT / args.outdir
 outdir.mkdir(parents=True, exist_ok=True)
 slug = "spiral" if args.setup == "spiral" else "logistic"
-stem = f"vud_{slug}_n{n}_sub{msub}_est{args.n_estimators}"
+stem = f"vud_{slug}_n{n}_eval{msub}_est{args.n_estimators}"
 np.savez(outdir / f"{stem}.npz",
          x_grid=x_grid, gn_all=gn_all, sigma2=sigma2, total_entropy=total_entropy,
          alea_clt=alea_clt, epis_clt=epis_clt, sub_idx=sub_idx, x_sub=x_sub,

@@ -20,9 +20,9 @@ context orderings (TabPFN is row invariant) and no prompt serialisation
 
 | Setting | Script | Command | Output stem (in `vud_outputs/`) |
 |---|---|---|---|
-| Two Moons, n=100 | `vud_two_moons.py` | `python vud_two_moons.py` | `vud_two_moons_n100_sub144_est8` |
-| Three-class spiral, n=200 | `vud_spiral_logreg.py` | `python vud_spiral_logreg.py --setup spiral` | `vud_spiral_n200_sub144_est8` |
-| Logistic-linear, n=75 | `vud_spiral_logreg.py` | `python vud_spiral_logreg.py --setup logistic-linear` | `vud_logistic_n75_sub151_est8` |
+| Two Moons, n=100 | `vud_two_moons.py` | `python vud_two_moons.py` | `vud_two_moons_n100_eval144_est8` |
+| Three-class spiral, n=200 | `vud_spiral_logreg.py` | `python vud_spiral_logreg.py --setup spiral` | `vud_spiral_n200_eval144_est8` |
+| Logistic-linear, n=75 | `vud_spiral_logreg.py` | `python vud_spiral_logreg.py --setup logistic-linear` | `vud_logistic_n75_eval151_est8` |
 
 The Two Moons experiment was run first; `vud_spiral_logreg.py` applies the
 identical recipe to the paper's other two settings and computes the CLT side
@@ -40,9 +40,11 @@ Each run writes a `.npz` (per-point arrays: `H_sub` total entropy,
 `_table.txt` (summary statistics and probe rows); the Two Moons statistics
 are computed from the `.npz` arrays as described in the last section.
 
-Naming note: `subNNN` is the number of evaluated grid points — 144 of the
-3600-point (60x60) grid for Two Moons and the spiral; all 151 points of the
-one-dimensional grid for logistic-linear.
+Naming note: `evalNNN` is the number of grid points VUD was evaluated at —
+144 of the 3600-point (60x60) CLT grid for Two Moons and the spiral (VUD is
+expensive per query point); all 151 points of the one-dimensional grid for
+logistic-linear. The `_sub` suffix in the `.npz` array names means the same
+restriction: those arrays hold the CLT values at the evaluated points.
 
 ## Reproducing the reported statistics
 
